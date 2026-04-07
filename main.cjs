@@ -294,6 +294,75 @@ ipcMain.on('set-model-env', (_event, cfg) => {
 ipcMain.handle('config-load', () => loadLocalConfig());
 ipcMain.handle('config-save', (_event, cfg) => saveLocalConfig(cfg));
 
+// ===== 检查更新 =====
+const { version: APP_VERSION } = require('./package.json');
+const GITHUB_API = 'api.github.com';
+const GITHUB_REPO = '/repos/icoolfa/CC-ibwhale/releases/latest';
+
+ipcMain.handle('get-app-version', () => APP_VERSION);
+
+ipcMain.handle('check-update', async () => {
+  try {
+    const result = await githubRequest(GITHUB_API, GITHUB_REPO);
+    if (!result || !result.tag_name) return { ok: false, error: '获取版本失败' };
+
+    const latestTag = result.tag_name.replace(/^v/, '');
+    const current = APP_VERSION;
+    const hasUpdate = compareVersions(latestTag, current) > 0;
+
+    return {
+      ok: true,
+      hasUpdate,
+      current,
+      latest: latestTag,
+      name: result.name || latestTag,
+      body: result.body || '',
+      htmlUrl: result.html_url || 'https://github.com/icoolfa/CC-ibwhale/releases',
+      assets: (result.assets || []).map(a => ({ name: a.name, url: a.browser_download_url, size: a.size })),
+    };
+  } catch (err) {
+    console.error('[ibwhale] 检查更新失败:', err.message);
+    return { ok: false, error: err.message };
+  }
+});
+
+function compareVersions(a, b) {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    const diff = (pa[i] || 0) - (pb[i] || 0);
+    if (diff !== 0) return diff > 0 ? 1 : -1;
+  }
+  return 0;
+}
+
+function githubRequest(host, path) {
+  return new Promise((resolve, reject) => {
+    const options = {
+      method: 'GET',
+      hostname: host,
+      port: 443,
+      path,
+      headers: { 'User-Agent': 'ibwhale', 'Accept': 'application/vnd.github.v3+json' },
+    };
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => (data += chunk));
+      res.on('end', () => {
+        try {
+          if (res.statusCode === 404) { resolve(null); return; }
+          if (res.statusCode && res.statusCode >= 400) { reject(new Error(`HTTP ${res.statusCode}`)); return; }
+          resolve(JSON.parse(data));
+        } catch { reject(new Error('无效响应')); }
+      });
+    });
+    req.on('error', reject);
+    req.setTimeout(10000, () => { req.destroy(); reject(new Error('请求超时')); });
+    req.end();
+  });
+}
+
 // ===== 翻译 (主进程，无 CORS 限制) =====
 ipcMain.handle('translate', async (_event, text) => {
   const cfg = loadLocalConfig();

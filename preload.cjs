@@ -38,4 +38,6 @@ window.electronAPI = {
     ipcRenderer.on('conv-exit', h);
     return () => ipcRenderer.removeListener('conv-exit', h);
   },
+  checkUpdate: () => ipcRenderer.invoke('check-update'),
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 };
