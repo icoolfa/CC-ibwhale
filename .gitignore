@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Config & env
+.env
+ibwhale-user-config.json
+
+# Logs
+error.log
+
+# Windows
+*.lnk
+Thumbs.db
+
+# OS
+.DS_Store

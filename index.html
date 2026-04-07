@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
+  <title>ibwhale · Claude Code</title>
+  <link rel="stylesheet" href="./dist/xterm.css">
+  <style>
+    /* ===== 与 web/public/styles.css 完全一致 ===== */
+    :root {
+      color-scheme: dark;
+      --bg: #2a2a2a; --bg-sidebar: #222222; --bg-card: #353535;
+      --bg-input: #404040; --bg-hover: #3a3a3a; --border: #404040;
+      --text: #ececf1; --text-sub: #8e8ea0;
+      --accent: #10a37f; --accent-hover: #0d8c6d;
+      --error: #f87171; --sidebar-width: 260px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; font-family: "SimHei","Segoe UI","Microsoft YaHei","PingFang SC",sans-serif; background: var(--bg); color: var(--text); overflow: hidden; user-select: none; }
+    button, input, textarea, select { font: inherit; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+
+    .page { display: flex; height: 100%; }
+
+    /* ── Sidebar ── */
+    .sidebar { width: var(--sidebar-width); background: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; position: relative; z-index: 50; transition: margin-left 0.25s ease; }
+    .sidebar.hide { margin-left: calc(-1 * var(--sidebar-width)); }
+    .sidebar-header { padding: 12px; border-bottom: 1px solid var(--border); }
+    .new-chat-btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px; border: 1px dashed var(--border); border-radius: 10px; background: transparent; color: var(--text); font-size: 14px; cursor: pointer; transition: all 0.15s; }
+    .new-chat-btn:hover { background: var(--bg-hover); border-color: var(--accent); color: var(--accent); }
+    .sidebar-list { flex: 1; overflow-y: auto; padding: 8px; }
+    .sidebar-item { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 8px; cursor: pointer; font-size: 13px; color: var(--text-sub); transition: all 0.12s; position: relative; }
+    .sidebar-item:hover { background: var(--bg-hover); color: var(--text); }
+    .sidebar-item.active { background: var(--bg-card); color: var(--text); }
+    .sidebar-item-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sidebar-item-rename { flex: 1; background: var(--bg-input); border: 1px solid var(--accent); border-radius: 4px; color: var(--text); font-size: 13px; outline: none; padding: 2px 6px; font-family: inherit; }
+    .sidebar-item-close { display: none; background: none; border: none; color: var(--text-sub); cursor: pointer; padding: 2px 4px; border-radius: 4px; font-size: 14px; line-height: 1; flex-shrink: 0; }
+    .sidebar-item:hover .sidebar-item-close { display: block; }
+    .sidebar-item-close:hover { background: rgba(248,113,113,0.2); color: var(--error); }
+    .sidebar-empty { text-align: center; color: var(--text-sub); font-size: 13px; padding: 24px 12px; }
+    .sidebar-footer { padding: 12px; border-top: 1px solid var(--border); }
+    .sidebar-user { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 8px; cursor: pointer; }
+    .sidebar-user:hover { background: var(--bg-hover); }
+    .user-avatar-sm { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; background: var(--bg-card); }
+    .theme-dot { width: 18px; height: 18px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: all 0.15s; display: inline-block; }
+    .theme-dot:hover { border-color: var(--text-sub); transform: scale(1.2); }
+    .theme-dot.active { border-color: var(--accent); }
+
+    /* ── Main ── */
+    .main { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100%; }
+
+    /* ── Topbar ── */
+    .topbar { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; -webkit-app-region: drag; }
+    .topbar-left { display: flex; align-items: center; gap: 12px; -webkit-app-region: no-drag; }
+    .topbar-right { display: flex; align-items: center; gap: 8px; -webkit-app-region: no-drag; }
+    .menu-btn { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border: none; background: transparent; color: var(--text-sub); cursor: pointer; border-radius: 8px; transition: all 0.15s; }
+    .menu-btn:hover { background: var(--bg-hover); color: var(--text); }
+    .topbar-brand { font-size: 15px; font-weight: 600; }
+    .topbar-status { font-size: 12px; color: var(--accent); animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+    .win-btns { display: flex; gap: 2px; }
+    .win-btn { width: 36px; height: 30px; border: none; background: transparent; color: var(--text-sub); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.1s; }
+    .win-btn:hover { background: var(--bg-hover); color: var(--text); }
+    .win-btn.close:hover { background: #e81123; color: #fff; }
+
+    /* ── Model Switcher (web 一致) ── */
+    .model-switcher { position: relative; }
+    .model-btn { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); font-size: 13px; cursor: pointer; transition: background 0.15s; }
+    .model-btn:hover { background: var(--bg-input); }
+    .model-btn .model-icon { color: var(--accent); }
+    .model-btn .chevron { color: var(--text-sub); transition: transform 0.2s; }
+    .model-dropdown { position: absolute; top: calc(100% + 6px); left: 0; width: 420px; max-height: 420px; overflow-y: auto; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 6px; z-index: 100; box-shadow: 0 8px 30px rgba(0,0,0,0.4); display: none; }
+.model-dropdown.open { display: block; }
+    .model-option { padding: 10px 14px; border-radius: 8px; cursor: pointer; color: var(--text); transition: background 0.12s; line-height: 1.4; }
+    .model-option:hover { background: var(--bg-input); }
+    .model-option.active { background: #1a3a2f; }
+    .model-main-row { display: flex; align-items: center; gap: 8px; }
+    .model-name { font-size: 13px; font-weight: 600; flex: 1; }
+    .model-date { font-size: 11px; color: var(--text-sub); opacity: 0.6; }
+    .model-rating { font-size: 11px; color: #f59e0b; font-weight: 600; }
+    .model-price { font-size: 10px; color: var(--text-sub); font-family: monospace; white-space: nowrap; }
+    .model-desc-row { font-size: 11px; color: var(--text-sub); margin-top: 2px; margin-left: 2px; }
+    .model-option.active .model-name { color: var(--accent); }
+    .model-option.active .model-desc-row { color: #6bbfaa; }
+
+    /* ── Terminal ── */
+    .term-wrap { flex: 1; position: relative; overflow: hidden; min-height: 0; }
+    #terminal { width: 100%; height: 100%; padding: 8px 16px; }
+    #terminal .xterm { height: 100%; }
+    #terminal .xterm-viewport { scrollbar-width: thin; scrollbar-color: #444 transparent; }
+    #terminal .xterm-viewport::-webkit-scrollbar { width: 5px; }
+    #terminal .xterm-viewport::-webkit-scrollbar-track { background: transparent; }
+    #terminal .xterm-viewport::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+
+    /* ── Hide CC UI elements ── */
+    .xterm .logo-area, .ascii-art { display: none !important; }
+    .tips-panel, [class*="Tips"] { display: none !important; }
+    .recent-activity { display: none !important; }
+    .xterm .prompt { background: transparent !important; }
+    .xterm, .xterm-viewport { background: transparent !important; }
+
+    /* ── Input bar ── */
+    .input-bar { padding: 12px 20px 16px; flex-shrink: 0; }
+    .input-wrapper { max-width: 780px; margin: 0 auto; display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 16px; padding: 8px 12px; background: var(--bg-card); transition: border-color 0.2s; }
+    .input-wrapper:focus-within { border-color: var(--accent); }
+    .input-wrapper input { flex: 1; border: none; background: transparent; color: var(--text); font-size: 15px; outline: none; padding: 4px; }
+    .input-wrapper input::placeholder { color: #5a5a6e; }
+    .send-btn { width: 36px; height: 36px; border-radius: 50%; border: none; background: var(--bg-input); color: var(--text-sub); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; flex-shrink: 0; }
+    .send-btn.on { background: var(--accent); color: #fff; }
+    .input-hint { text-align: center; font-size: 12px; color: var(--text-sub); margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+
+    /* ── API Settings Modal (web 一致) ── */
+    .api-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 200; backdrop-filter: blur(8px); }
+    .api-overlay.open { display: flex; }
+    .api-card { background: var(--bg-sidebar); border: 1px solid var(--border); border-radius: 16px; padding: 28px; width: 480px; max-width: 92vw; max-height: 88vh; overflow-y: auto; }
+    .api-header { margin-bottom: 20px; position: relative; }
+    .api-card h2 { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+    .api-desc { font-size: 13px; color: var(--text-sub); margin-bottom: 12px; }
+    .api-close { position: absolute; top: 0; right: 0; background: none; border: none; color: var(--text-sub); cursor: pointer; padding: 6px; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+    .api-close:hover { background: var(--bg-hover); color: var(--text); }
+    .api-provider-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-bottom: 20px; }
+    .api-provider-item { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 6px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); cursor: pointer; transition: all 0.15s; }
+    .api-provider-item:hover { border-color: var(--text-sub); }
+    .api-provider-item.active { border-color: var(--accent); background: rgba(16,163,127,0.08); }
+    .api-provider-item.configured { border-color: rgba(16,163,127,0.3); background: rgba(16,163,127,0.04); }
+    .provider-icon { font-size: 22px; line-height: 1; }
+    .provider-name { font-size: 11px; color: var(--text-sub); text-align: center; }
+    .api-provider-item.active .provider-name { color: var(--accent); }
+    .provider-badge { font-size: 9px; color: var(--accent); background: rgba(16,163,127,0.12); padding: 1px 6px; border-radius: 3px; }
+    .api-fields { margin-bottom: 16px; }
+    .api-input-group { margin-bottom: 14px; }
+    .api-input-group label { display: block; font-size: 13px; color: var(--text-sub); margin-bottom: 6px; }
+    .api-input-group input { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font-size: 14px; outline: none; transition: border-color 0.2s; }
+    .api-input-group input:focus { border-color: var(--accent); }
+    .api-input-group input::placeholder { color: #555; }
+    .api-status { padding: 8px 12px; border-radius: 8px; font-size: 13px; text-align: center; margin-bottom: 12px; }
+    .api-status.ok { background: rgba(16,163,127,0.12); color: var(--accent); }
+    .api-status.err { background: rgba(248,113,113,0.12); color: var(--error); }
+    .api-models { margin-bottom: 16px; padding: 10px 14px; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); }
+    .api-models-label { font-size: 11px; color: var(--text-sub); display: block; margin-bottom: 6px; }
+    .api-models-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .model-tag { font-size: 11px; padding: 3px 8px; border-radius: 4px; background: var(--bg-card); color: var(--text-sub); border: 1px solid var(--border); cursor: pointer; transition: all 0.15s; }
+    .model-tag:hover { border-color: var(--accent); color: var(--accent); }
+    .model-tag.sel { background: rgba(16,163,127,0.15); color: var(--accent); border-color: var(--accent); font-weight: 600; }
+    .api-save { width: 100%; padding: 11px; border: none; border-radius: 10px; background: var(--accent); color: #fff; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.15s; }
+    .api-save:hover { background: var(--accent-hover); }
+    .api-clear { text-align: center; margin-top: 12px; }
+    .api-clear button { background: none; border: none; color: var(--text-sub); cursor: pointer; font-size: 12px; text-decoration: underline; padding: 4px 8px; border-radius: 4px; }
+    .api-clear button:hover { color: var(--error); }
+
+    /* ── API Input Wrap + Eye ── */
+    .api-input-wrap { position: relative; display: flex; align-items: center; }
+    .api-input-wrap input { padding-right: 36px; }
+    .api-eye-btn { position: absolute; right: 8px; background: none; border: none; color: var(--text-sub); cursor: pointer; padding: 4px; display: flex; align-items: center; border-radius: 4px; transition: color 0.15s; }
+    .api-eye-btn:hover { color: var(--text); }
+    .optional { font-size: 11px; color: var(--text-sub); opacity: 0.6; }
+
+    /* ── Local Service Selector ── */
+    .local-service-selector { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+    .local-service-tag { padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text-sub); font-size: 12px; cursor: pointer; transition: all 0.15s; }
+    .local-service-tag:hover { border-color: var(--text-sub); }
+    .local-service-tag.active { border-color: var(--accent); color: var(--accent); background: rgba(16,163,127,0.08); }
+    .local-or { font-size: 11px; color: var(--text-sub); opacity: 0.5; }
+
+    /* ── Translate ── */
+    .tp-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 150; }
+    .tp-overlay.open { display: flex; justify-content: flex-end; }
+    .tp { width: 340px; height: 100%; background: var(--bg-sidebar); border-left: 1px solid var(--border); display: flex; flex-direction: column; animation: slideIn 0.25s ease; }
+    @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+    .tp-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 14px; font-weight: 600; }
+    .tp-close { width: 26px; height: 26px; border: none; border-radius: 6px; background: transparent; color: var(--text-sub); cursor: pointer; font-size: 18px; }
+    .tp-close:hover { background: var(--bg-hover); color: var(--text); }
+    .tp-body { flex: 1; overflow-y: auto; padding: 16px; }
+    .tp-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-sub); margin-bottom: 8px; }
+    .tp-box { padding: 10px 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; font-size: 12px; line-height: 1.6; color: var(--text-sub); word-break: break-all; white-space: pre-wrap; margin-bottom: 16px; }
+    .tp-result { padding: 10px 14px; background: rgba(16,163,127,0.08); border: 1px solid rgba(16,163,127,0.2); border-radius: 8px; font-size: 14px; line-height: 1.7; color: var(--text); word-break: break-all; white-space: pre-wrap; }
+
+    .tr-btn { position: fixed; bottom: 80px; right: 24px; display: none; align-items: center; gap: 6px; padding: 8px 16px; background: var(--accent); border: none; border-radius: 10px; color: #fff; font-size: 13px; cursor: pointer; z-index: 100; box-shadow: 0 4px 16px rgba(16,163,127,0.3); transition: opacity 0.15s; }
+    .tr-btn:hover { background: var(--accent-hover); }
+    #btn-translate.active { color: var(--accent); background: rgba(16,163,127,0.15); }
+
+    /* ── Context Menu ── */
+    .ctx-menu { display: none; position: fixed; z-index: 200; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 4px; min-width: 160px; box-shadow: 0 8px 30px rgba(0,0,0,0.4); }
+    .ctx-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 8px; background: none; border: none; color: var(--text); font-size: 13px; cursor: pointer; width: 100%; text-align: left; font-family: inherit; }
+    .ctx-item:hover { background: var(--bg-hover); }
+    .ctx-item[disabled] { opacity: 0.4; cursor: default; }
+    .ctx-key { margin-left: auto; font-size: 11px; color: var(--text-sub); }
+
+    /* ── Error ── */
+    .err-overlay { display: none; position: fixed; top: 56px; left: 50%; transform: translateX(-50%); z-index: 999; background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.3); border-radius: 12px; padding: 14px 20px; max-width: 600px; width: 90%; }
+    .err-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .err-title { color: var(--error); font-weight: 600; font-size: 13px; }
+    .err-actions { display: flex; gap: 6px; }
+    .err-btn { padding: 3px 10px; border: 1px solid rgba(248,113,113,0.3); border-radius: 6px; background: rgba(248,113,113,0.08); color: #fca5a5; cursor: pointer; font-size: 12px; }
+    .err-btn:hover { background: rgba(248,113,113,0.2); }
+    .err-text { margin: 0; color: #fca5a5; font-size: 12px; font-family: monospace; line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
+
+    /* ── Watermark Footer ── */
+    .watermark { position: fixed; bottom: 6px; right: 12px; z-index: 300; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; pointer-events: none; opacity: 0.35; transition: opacity 0.2s; }
+    .watermark:hover { opacity: 0.7; pointer-events: auto; }
+    .watermark-site { font-size: 11px; color: var(--text-sub); text-decoration: none; }
+    .watermark-ver { font-size: 10px; color: var(--text-sub); }
+    .watermark-copy { font-size: 9px; color: var(--text-sub); opacity: 0.7; }
+
+    /* ── Name Overlay ── */
+    .name-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 300; align-items: center; justify-content: center; backdrop-filter: blur(8px); }
+    .name-overlay.open { display: flex; }
+    .name-card { background: var(--bg-sidebar); border: 1px solid var(--border); border-radius: 16px; padding: 32px; width: 380px; text-align: center; }
+    .name-card h2 { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
+    .name-card p { font-size: 13px; color: var(--text-sub); margin-bottom: 20px; }
+    .name-input-wrap { width: 100%; padding: 12px 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); color: var(--text); font-size: 15px; outline: none; text-align: center; transition: border-color 0.2s; }
+    .name-input-wrap:focus { border-color: var(--accent); }
+    .name-input-wrap::placeholder { color: #555; }
+    .name-save { width: 100%; padding: 12px; border: none; border-radius: 10px; background: var(--accent); color: #fff; font-size: 14px; font-weight: 500; cursor: pointer; margin-top: 16px; transition: background 0.15s; }
+    .name-save:hover { background: var(--accent-hover); }
+
+    /* ── Sidebar User Row ── */
+    .sidebar-user-row { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 8px; }
+
+    /* ── Help Button & Modal ── */
+    .help-btn { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--text-sub); background: transparent; color: var(--text-sub); cursor: pointer; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; transition: all 0.15s; line-height: 1; }
+    .help-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(16,163,127,0.08); }
+    .help-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 250; backdrop-filter: blur(8px); }
+    .help-overlay.open { display: flex; }
+    .help-card { background: var(--bg-sidebar); border: 1px solid var(--border); border-radius: 16px; padding: 28px; width: 560px; max-width: 92vw; max-height: 85vh; overflow-y: auto; }
+    .help-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .help-header h2 { font-size: 18px; font-weight: 600; }
+    .help-close { background: none; border: none; color: var(--text-sub); cursor: pointer; padding: 4px; border-radius: 6px; display: flex; align-items: center; }
+    .help-close:hover { background: var(--bg-hover); color: var(--text); }
+    .help-body h3 { font-size: 14px; font-weight: 600; color: var(--accent); margin: 16px 0 8px; }
+    .help-body h3:first-child { margin-top: 0; }
+    .help-list { list-style: none; padding: 0; margin: 0 0 12px; }
+    .help-list li { font-size: 13px; color: var(--text-sub); line-height: 1.7; padding: 2px 0; }
+    .help-list li b { color: var(--text); }
+    .help-disclaimer { margin-top: 16px; padding: 12px 14px; background: rgba(248,113,113,0.06); border: 1px solid rgba(248,113,113,0.15); border-radius: 8px; }
+    .help-disclaimer p { font-size: 12px; color: var(--text-sub); line-height: 1.7; margin: 0; }
+    .help-disclaimer b { color: var(--text); }
+    .sidebar-user-avatar { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; background: var(--bg-card); }
+    .sidebar-user-name { font-size: 13px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .edit-name-btn { background: none; border: none; color: var(--text-sub); cursor: pointer; padding: 4px; border-radius: 6px; display: flex; align-items: center; transition: all 0.15s; flex-shrink: 0; }
+    .edit-name-btn:hover { background: var(--bg-hover); color: var(--text); }
+  </style>
+</head>
+<body>
+<div class="page">
+  <!-- Sidebar -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <button class="new-chat-btn" id="btn-new-chat">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        新对话
+      </button>
+    </div>
+    <div class="sidebar-list" id="sidebar-list"></div>
+    <div class="sidebar-footer">
+      <div class="sidebar-user-row">
+        <div class="sidebar-user-avatar" id="avatar-cycle" style="padding:0;overflow:hidden;cursor:pointer;border:2px solid var(--accent);transition:border-color 0.3s" title="点击换头像">
+          <img src="logo.png" style="width:100%;height:100%;object-fit:cover;border-radius:50%" />
+        </div>
+        <span class="sidebar-user-name" id="sidebar-user-name">用户</span>
+        <button class="edit-name-btn" id="edit-name-btn" title="修改名字">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <div class="sidebar-user" id="open-api-settings" title="API 配置" style="padding:4px;border-radius:6px;cursor:pointer;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span id="sidebar-api-dot" style="width:6px;height:6px;border-radius:50%;margin-left:auto;flex-shrink:0;display:none;background:#10a37f;" title="已配置 API"></span>
+        </div>
+      </div>
+      <!-- 底色切换 -->
+      <div style="display:flex;gap:6px;padding:8px 4px 0;justify-content:center;">
+        <span class="theme-dot" data-bg="#1a1a1a" style="background:#1a1a1a;" title="深色"></span>
+        <span class="theme-dot" data-bg="#2a2a2a" style="background:#2a2a2a;" title="灰色"></span>
+        <span class="theme-dot" data-bg="#1e293b" style="background:#1e293b;" title="深蓝"></span>
+        <span class="theme-dot" data-bg="#1a2e1a" style="background:#1a2e1a;" title="深绿"></span>
+        <span class="theme-dot" data-bg="#2e1a2e" style="background:#2e1a2e;" title="深紫"></span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="menu-btn" id="sidebar-toggle" title="切换侧栏">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <!-- Model Switcher -->
+        <div class="model-switcher" id="model-switcher">
+          <button class="model-btn" id="model-btn">
+            <svg class="model-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"/></svg>
+            <span id="model-label">选择模型</span>
+            <svg class="chevron" id="model-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="model-dropdown" id="model-dropdown"></div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <span class="topbar-status" id="status-text" style="display:none;"></span>
+        <button class="menu-btn" id="btn-kill" title="终止">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+        </button>
+        <button class="menu-btn" id="btn-restart" title="重启">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        </button>
+        <button class="menu-btn" id="btn-translate" title="翻译开关">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        </button>
+        <div class="win-btns">
+          <button class="win-btn" id="btn-min"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          <button class="win-btn" id="btn-max"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></button>
+          <button class="win-btn close" id="btn-close"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+      </div>
+    </header>
+
+    <div class="term-wrap">
+      <div id="terminal"></div>
+    </div>
+
+    <button class="tr-btn" id="tr-btn">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      翻译为中文
+    </button>
+
+    <footer class="input-bar">
+      <div class="input-wrapper">
+        <input type="text" id="cmd-input" placeholder="输入命令... (Enter 发送)" autocomplete="off" />
+        <button class="send-btn" id="cmd-send">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+      <div class="input-hint">Ctrl+C 复制 | Ctrl+V 粘贴 | 右键菜单
+        <button class="help-btn" id="help-btn" title="帮助与说明">?</button>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<!-- Watermark -->
+<div class="watermark">
+  <a class="watermark-site" href="https://ibwhale.com/profile/3720008" target="_blank" rel="noopener">ibwhale.com</a>
+  <span class="watermark-ver">ibwhale v1.3</span>
+  <span class="watermark-copy">Copyright © 2026 ibwhale. All rights reserved.</span>
+</div>
+
+<!-- Help Modal -->
+<div class="help-overlay" id="help-overlay">
+  <div class="help-card">
+    <div class="help-header">
+      <h2>使用说明</h2>
+      <button class="help-close" id="help-close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="help-body">
+      <h3>🔑 快捷键与操作</h3>
+      <ul class="help-list">
+        <li><b>Ctrl+C</b> — 在输入框中复制选中内容；在终端内容页中终止/关闭当前进程</li>
+        <li><b>输入框</b> — 仅用于输入命令，不参与交互式选择（如数字选项）</li>
+        <li><b>交互式选择</b> — 需将鼠标移到终端内容区，按数字键或键盘方向键选择</li>
+        <li><b>Ctrl+V</b> — 粘贴文本到终端</li>
+        <li><b>Enter</b> — 发送输入栏内容到终端</li>
+        <li><b>右键菜单</b> — 复制 / 粘贴 / 全选 / 清屏</li>
+        <li><b>终止进程</b> — 点击顶部 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg> 按钮</li>
+        <li><b>重启进程</b> — 点击顶部 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> 按钮</li>
+      </ul>
+      <h3>💬 对话管理</h3>
+      <ul class="help-list">
+        <li><b>新对话</b> — 点击侧栏「新对话」按钮，创建独立终端</li>
+        <li><b>重命名</b> — 双击对话标题，输入新名称</li>
+        <li><b>关闭对话</b> — hover 对话条目，点击 × 按钮</li>
+      </ul>
+      <h3>🧠 模型切换</h3>
+      <ul class="help-list">
+        <li><b>选择模型</b> — 点击顶部模型选择器，切换已配置的大模型</li>
+        <li><b>自定义模型</b> — 在 API 配置中输入任意模型 ID</li>
+      </ul>
+      <h3>⚙️ API 配置</h3>
+      <ul class="help-list">
+        <li><b>打开设置</b> — 点击左下角钥匙图标</li>
+        <li><b>服务商</b> — 支持 OpenAI / Claude / DeepSeek / 阿里云 / 智谱 / 月之暗面 / OpenRouter / 本地模型</li>
+        <li><b>数据保存</b> — 所有配置存储在本地文件（非浏览器 localStorage），重装不丢失</li>
+      </ul>
+      <div class="help-disclaimer">
+        <p><b>免责声明：</b> 本软件仅供个人学习与研究使用，基于 ibwhale 框架开发，与 Anthropic 官方 Claude Code 无直接关联。用户使用本软件进行的一切行为及产生的后果由用户自行承担。请遵守各模型服务商的使用条款及相关法律法规。</p>
+      </div>
+      <div class="help-disclaimer" style="margin-top:12px;background:rgba(16,163,127,0.06);border-color:rgba(16,163,127,0.15);">
+        <p style="font-size:11px;line-height:1.8;"><b>MIT License</b><br>
+        Copyright (c) 2026 ibwhale<br><br>
+        Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:<br><br>
+        The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.<br><br>
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- API Settings Modal (web 一致) -->
+<div class="api-overlay" id="api-overlay">
+  <div class="api-card">
+    <div class="api-header">
+      <h2>API 配置</h2>
+      <p class="api-desc">配置你的 API Key，支持多家主流大模型服务商</p>
+      <button class="api-close" id="api-close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="api-provider-grid" id="provider-grid"></div>
+    <div class="api-fields">
+      <div class="api-input-group" id="local-service-group" style="display:none;">
+        <label>服务地址</label>
+        <div class="local-service-selector" id="local-service-selector"></div>
+        <input type="text" id="api-local-url" placeholder="自定义地址，默认 http://localhost:11434" style="margin-top:6px;" />
+      </div>
+      <div class="api-input-group">
+        <label>API Key</label>
+        <div class="api-input-wrap">
+          <input type="password" id="api-key-input" placeholder="sk-..." />
+          <button class="api-eye-btn" id="api-eye-btn" title="显示/隐藏">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="api-input-group">
+        <label>模型 ID <span class="optional">可选</span></label>
+        <input type="text" id="api-custom-model" placeholder="留空使用默认模型" />
+      </div>
+    </div>
+    <div class="api-status" id="api-status" style="display:none;"></div>
+    <div class="api-models" id="api-models-section" style="display:none;">
+      <span class="api-models-label">选择模型（点击设为默认）</span>
+      <div class="api-models-list" id="api-models-list"></div>
+    </div>
+    <button class="api-save" id="api-save">保存并生效</button>
+    <div class="api-clear"><button id="api-clear-btn">清除配置</button></div>
+  </div>
+</div>
+
+<!-- Translate Panel -->
+<div class="tp-overlay" id="tp-overlay">
+  <div class="tp">
+    <div class="tp-head"><span>&#x1f30d; 翻译结果</span><button class="tp-close" id="tp-close">&times;</button></div>
+    <div class="tp-body">
+      <div class="tp-label">原文</div><div class="tp-box" id="tp-orig"></div>
+      <div class="tp-label">译文</div><div class="tp-result" id="tp-result"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Context Menu -->
+<div class="ctx-menu" id="ctx-menu">
+  <button class="ctx-item" id="ctx-copy"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> 复制 <span class="ctx-key">Ctrl+C</span></button>
+  <button class="ctx-item" id="ctx-paste"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg> 粘贴 <span class="ctx-key">Ctrl+V</span></button>
+  <button class="ctx-item" id="ctx-select-all">全选</button>
+  <button class="ctx-item" id="ctx-clear">清屏</button>
+</div>
+
+<!-- Error -->
+<div class="err-overlay" id="err-overlay">
+  <div class="err-head"><span class="err-title">&#x26a0; 错误</span><div class="err-actions"><button class="err-btn" id="err-copy">复制</button><button class="err-btn" id="err-close">关闭</button></div></div>
+  <pre class="err-text" id="err-text"></pre>
+</div>
+
+<!-- Name Setup -->
+<div class="name-overlay" id="name-overlay">
+  <div class="name-card">
+    <h2>欢迎来到 ibwhale</h2>
+    <p>请输入你的名字</p>
+    <input class="name-input-wrap" id="name-input" placeholder="输入昵称..." maxlength="20" />
+    <button class="name-save" id="name-save-btn">开始使用</button>
+  </div>
+</div>
+
+<script type="module" src="./dist/renderer.js"></script>
+<script type="module">
+// ===== Providers (与 web/app.js 完全同步 =====
+const PROVIDERS = [
+  { id:"openai", label:"OpenAI", icon:"🔵", apiBaseUrl:"https://api.openai.com", models:[
+    {id:"gpt-5",label:"GPT-5",date:"2025-08",rating:9.2,price:"10/40",desc:"最新旗舰 · 推理与工具调用"},
+    {id:"gpt-5-mini",label:"GPT-5 Mini",date:"2025-08",rating:8.7,price:"1.5/6",desc:"轻量版GPT-5 · 高性价比"},
+    {id:"gpt-4.1",label:"GPT-4.1",date:"2025-04",rating:8.9,price:"7.5/30",desc:"长上下文专家 · 1M窗口"},
+    {id:"gpt-4o",label:"GPT-4o",date:"2024-11",rating:8.6,price:"2.5/10",desc:"多模态通用 · 视觉与文本"},
+    {id:"gpt-4o-mini",label:"GPT-4o Mini",date:"2024-07",rating:8.0,price:"0.15/0.6",desc:"免费额度高 · 日常对话"},
+    {id:"o3",label:"o3",date:"2025-03",rating:9.1,price:"10/40",desc:"深度推理 · 数学与代码"},
+    {id:"o3-mini",label:"o3-mini",date:"2025-01",rating:8.5,price:"1.1/4.4",desc:"轻量推理 · 性价比之选"},
+  ]},
+  { id:"claude", label:"Anthropic", icon:"🟠", apiBaseUrl:"https://api.anthropic.com", models:[
+    {id:"claude-opus-4-6",label:"Claude Opus 4.6",date:"2026-02",rating:9.4,price:"15/75",desc:"2026最新旗舰 · 复杂推理王者"},
+    {id:"claude-sonnet-4-6",label:"Claude Sonnet 4.6",date:"2026-02",rating:9.1,price:"3/15",desc:"推荐 · 性能价格最佳平衡"},
+    {id:"claude-sonnet-4-5-20250514",label:"Claude Sonnet 4.5",date:"2025-05",rating:8.9,price:"3/15",desc:"上一代均衡 · 编程能力强"},
+    {id:"claude-haiku-4-5-20251001",label:"Claude Haiku 4.5",date:"2025-10",rating:8.2,price:"0.8/4",desc:"极速响应 · 轻量任务"},
+  ]},
+  { id:"deepseek", label:"DeepSeek", icon:"🐋", apiBaseUrl:"https://api.deepseek.com", models:[
+    {id:"deepseek-v4",label:"DeepSeek V4",date:"2026-03",rating:9.1,price:"0.3/0.5",desc:"最新旗舰 · 1M上下文 · 原生多模态"},
+    {id:"deepseek-v3",label:"DeepSeek V3",date:"2025-04",rating:8.8,price:"0.27/1.1",desc:"🆓 免费额度大 · 中文能力突出"},
+    {id:"deepseek-r1",label:"DeepSeek R1",date:"2025-01",rating:9.0,price:"0.55/2.2",desc:"深度推理 · 数学与代码"},
+  ]},
+  { id:"aliyun", label:"阿里云百炼", icon:"☁️", apiBaseUrl:"https://dashscope.aliyuncs.com/apps/anthropic", models:[
+    {id:"qwen3.6-plus",label:"Qwen3.6-Plus",date:"2026-04",rating:9.0,price:"2/8",desc:"最新旗舰 · 编程Agent全面升级"},
+    {id:"qwen3.5-plus",label:"Qwen3.5-Plus",date:"2026-02",rating:8.8,price:"1.25/5",desc:"多模态理解 · 图文视频输入"},
+    {id:"qwen3.5-flash",label:"Qwen3.5-Flash",date:"2026-02",rating:8.3,price:"0.25/1",desc:"极速响应 · 高性价比"},
+    {id:"qwen3-max",label:"Qwen3-Max",date:"2025-09",rating:8.7,price:"2/8",desc:"旗舰推理 · 万亿参数"},
+    {id:"qwen3-max-thinking",label:"Qwen3-Max-Thinking",date:"2026-01",rating:8.9,price:"2/8",desc:"深度思考 · 超长推理链"},
+    {id:"qwen3-plus",label:"Qwen3-Plus",date:"2025-05",rating:8.5,price:"0.5/1.5",desc:"均衡模型 · 性价比之选"},
+    {id:"qwen3-flash",label:"Qwen3-Flash",date:"2025-05",rating:8.1,price:"0.1/0.4",desc:"快速轻量 · 日常对话"},
+    {id:"qwen3-coder-plus",label:"Qwen3-Coder-Plus",date:"2025-09",rating:8.5,price:"2/8",desc:"代码生成 · 智能体编程"},
+    {id:"qwen3-coder-flash",label:"Qwen3-Coder-Flash",date:"2025-09",rating:8.2,price:"0.5/2",desc:"快速补全 · 代码助手"},
+    {id:"qwen-long",label:"Qwen-Long",date:"2024-02",rating:7.5,price:"0.5/2",desc:"超长上下文 · 百万Token"},
+  ]},
+  { id:"zhipu", label:"智谱", icon:"🧠", apiBaseUrl:"https://open.bigmodel.cn", models:[
+    {id:"glm-5.1",label:"GLM-5.1",date:"2026-03",rating:8.9,price:"2/8",desc:"最新旗舰 · 工程化编程"},
+    {id:"glm-5",label:"GLM-5",date:"2026-02",rating:8.8,price:"3/12",desc:"Agentic Coding · 开源SOTA"},
+    {id:"glm-5-turbo",label:"GLM-5-Turbo",date:"2026-03",rating:8.3,price:"0.5/2",desc:"快速推理 · 工具调用强化"},
+    {id:"glm-5v-turbo",label:"GLM-5V-Turbo",date:"2026-03",rating:8.4,price:"1/4",desc:"视觉+编程 · 多模态"},
+    {id:"glm-4.7",label:"GLM-4.7",date:"2025-06",rating:8.2,price:"1/4",desc:"上一代稳定版"},
+    {id:"glm-4.7-flash",label:"GLM-4.7-Flash",date:"2025-06",rating:7.8,price:"0",desc:"免费轻量版"},
+    {id:"glm-4.6",label:"GLM-4.6",date:"2025-03",rating:8.0,price:"0.5/2",desc:"均衡通用 · 性价比高"},
+  ]},
+  { id:"moonshot", label:"月之暗面", icon:"🌙", apiBaseUrl:"https://api.moonshot.cn", models:[
+    {id:"kimi-k2.5",label:"Kimi K2.5",date:"2026-01",rating:8.7,price:"0.6/2.5",desc:"最新旗舰 · 万亿参数MoE · 256K上下文"},
+    {id:"kimi-k2-thinking",label:"Kimi K2 Thinking",date:"2026-01",rating:8.8,price:"0.6/2.5",desc:"深度推理 · 多步Agent · 思考模式"},
+    {id:"kimi-k2",label:"Kimi K2",date:"2025-07",rating:8.4,price:"0.5/2",desc:"长文档分析 · 编程助手"},
+  ]},
+  { id:"openrouter", label:"OpenRouter", icon:"🔗", apiBaseUrl:"https://openrouter.ai/api/v1", models:[
+    {id:"anthropic/claude-sonnet-4-6",label:"Claude Sonnet 4.6",date:"2026-02",rating:9.1,price:"3/15",desc:"Anthropic · 最佳平衡"},
+    {id:"anthropic/claude-opus-4-6",label:"Claude Opus 4.6",date:"2026-02",rating:9.4,price:"15/75",desc:"Anthropic · 旗舰推理"},
+    {id:"openai/gpt-5",label:"GPT-5",date:"2025-08",rating:9.2,price:"10/40",desc:"OpenAI · 最新旗舰"},
+    {id:"google/gemini-2.5-pro",label:"Gemini 2.5 Pro",date:"2025-05",rating:9.0,price:"2.5/10",desc:"Google · 多模态强大"},
+    {id:"deepseek/deepseek-v3",label:"DeepSeek V3",date:"2025-04",rating:8.8,price:"0.14/0.28",desc:"DeepSeek · 性价比极高"},
+    {id:"meta-llama/llama-3.3-70b-instruct",label:"Llama 3.3 70B",date:"2024-12",rating:8.5,price:"0.2/0.4",desc:"Meta · 开源最强"},
+    {id:"qwen/qwen3-235b-a22b",label:"Qwen3 235B",date:"2025-05",rating:8.7,price:"0.2/0.6",desc:"阿里 · 中文优秀"},
+  ]},
+  { id:"local", label:"本地模型", icon:"💻", apiBaseUrl:"http://localhost:11434", models:[
+    {id:"llama3",label:"Llama 3",date:"2024-04",rating:8.0,price:"0",desc:"Meta开源 · 通用对话 · 离线"},
+    {id:"qwen2.5",label:"Qwen 2.5",date:"2024-12",rating:7.7,price:"0",desc:"阿里开源 · 中文优秀 · 离线"},
+    {id:"deepseek-r1",label:"DeepSeek R1",date:"2025-01",rating:9.0,price:"0",desc:"深度推理 · 离线可用"},
+    {id:"mistral",label:"Mistral",date:"2024-10",rating:7.5,price:"0",desc:"Mistral AI · 轻量高效 · 离线"},
+  ], alternatives:[
+    {label:"Ollama",url:"http://localhost:11434"},
+    {label:"LM Studio",url:"http://localhost:1234"},
+    {label:"vLLM",url:"http://localhost:8000"},
+    {label:"llama.cpp",url:"http://localhost:8080"},
+    {label:"LocalAI",url:"http://localhost:8080"},
+  ]},
+];
+
+// ===== State =====
+let savedConfig = null;
+let selectedProviderId = '';
+let selectedModelId = '';
+let customModel = '';
+let apiKey = '';
+let localServiceUrl = '';
+let userName = '';
+let customModels = {}; // { providerId: [ {id, label} ] }
+
+// Load config from file
+async function loadConfigFromFile() {
+  if (window.electronAPI && window.electronAPI.loadConfig) {
+    try { savedConfig = await window.electronAPI.loadConfig(); } catch {}
+  }
+  if (savedConfig) {
+    selectedProviderId = savedConfig.providerId || '';
+    selectedModelId = savedConfig.selectedModelId || '';
+    customModel = savedConfig.customModel || '';
+    apiKey = savedConfig.apiKey || '';
+    localServiceUrl = savedConfig.localServiceUrl || '';
+    userName = savedConfig.userName || '';
+    customModels = savedConfig.customModels || {};
+    const theme = savedConfig.theme || '#2a2a2a';
+    applyTheme(theme);
+  } else {
+    applyTheme(localStorage.getItem('ibwhale_theme') || '#2a2a2a');
+  }
+  updateUserName();
+}
+
+async function persistConfig() {
+  const cfg = {
+    providerId: selectedProviderId,
+    apiKey, baseUrl: '', selectedModelId, customModel, localServiceUrl, userName,
+    theme: localStorage.getItem('ibwhale_theme') || '#2a2a2a',
+    customModels,
+  };
+  // Derive baseUrl from current provider
+  const p = PROVIDERS.find(x => x.id === selectedProviderId);
+  if (p) cfg.baseUrl = selectedProviderId === 'local' ? (localServiceUrl || p.apiBaseUrl) : p.apiBaseUrl;
+  if (window.electronAPI && window.electronAPI.saveConfig) {
+    try { await window.electronAPI.saveConfig(cfg); } catch {}
+  }
+  savedConfig = cfg;
+}
+
+// ===== User Name =====
+function updateUserName() { document.getElementById('sidebar-user-name').textContent = userName || '用户'; }
+function saveName(name) { userName = name.trim(); if (userName) { persistConfig(); updateUserName(); } }
+function showNameOverlay() { document.getElementById('name-overlay').classList.add('open'); setTimeout(() => document.getElementById('name-input').focus(), 100); }
+function initUserName() {
+  userName = localStorage.getItem('ibwhale_user_name') || '';
+  updateUserName();
+  document.getElementById('edit-name-btn').onclick = () => showNameOverlay();
+  document.getElementById('name-save-btn').onclick = () => { const v = document.getElementById('name-input').value.trim(); if (v) { saveName(v); document.getElementById('name-overlay').classList.remove('open'); } };
+  document.getElementById('name-input').onkeydown = (e) => { if (e.key === 'Enter') document.getElementById('name-save-btn').click(); };
+  document.getElementById('name-overlay').onclick = (e) => { if (e.target.id === 'name-overlay' && userName) e.target.classList.remove('open'); };
+}
+
+// ===== Local alternatives =====
+const LOCAL_ALTS = PROVIDERS.find(p => p.id === 'local')?.alternatives || [];
+
+// ===== Provider Grid =====
+const grid = document.getElementById('provider-grid');
+PROVIDERS.forEach(p => {
+  const el = document.createElement('div');
+  el.className = 'api-provider-item' + (p.id === selectedProviderId ? ' active' : '') + (p.id === savedConfig?.providerId ? ' configured' : '');
+  el.dataset.id = p.id;
+  el.innerHTML = `<div class="provider-icon">${p.icon}</div><span class="provider-name">${p.label}</span>${p.id===savedConfig?.providerId?'<span class="provider-badge">已配置</span>':''}`;
+  el.onclick = () => selectProvider(p.id);
+  grid.appendChild(el);
+});
+
+function selectProvider(id) {
+  selectedProviderId = id;
+  grid.querySelectorAll('.api-provider-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.id === id);
+  });
+  const p = PROVIDERS.find(x => x.id === id);
+  // Show/hide local service selector
+  const localGroup = document.getElementById('local-service-group');
+  localGroup.style.display = id === 'local' ? 'block' : 'none';
+  if (id === 'local') renderLocalServices();
+  // Restore key and custom model if switching to saved provider
+  if (id === savedConfig?.providerId) {
+    document.getElementById('api-key-input').value = apiKey;
+    document.getElementById('api-custom-model').value = customModel;
+    document.getElementById('api-local-url').value = localServiceUrl;
+  } else {
+    document.getElementById('api-key-input').value = '';
+    document.getElementById('api-custom-model').value = '';
+    if (id === 'local') document.getElementById('api-local-url').value = '';
+  }
+  renderModels(p);
+}
+
+function renderLocalServices() {
+  const container = document.getElementById('local-service-selector');
+  container.innerHTML = '';
+  LOCAL_ALTS.forEach(alt => {
+    const tag = document.createElement('span');
+    tag.className = 'local-service-tag' + (localServiceUrl === alt.url ? ' active' : '');
+    tag.textContent = alt.label;
+    tag.onclick = () => {
+      localServiceUrl = alt.url;
+      document.getElementById('api-local-url').value = alt.url;
+      container.querySelectorAll('.local-service-tag').forEach(t => t.classList.remove('active'));
+      tag.classList.add('active');
+    };
+    container.appendChild(tag);
+  });
+  const orSpan = document.createElement('span');
+  orSpan.className = 'local-or';
+  orSpan.textContent = '或';
+  container.appendChild(orSpan);
+}
+
+function renderModels(p) {
+  const section = document.getElementById('api-models-section');
+  const list = document.getElementById('api-models-list');
+  if (!p || !p.models.length) { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  list.innerHTML = '';
+  // Custom models for this provider
+  const cms = customModels[p.id] || [];
+  // Built-in models
+  p.models.forEach(m => {
+    const tag = document.createElement('span');
+    tag.className = 'model-tag' + (m.id === selectedModelId ? ' sel' : '');
+    tag.textContent = m.label;
+    tag.onclick = () => {
+      selectedModelId = m.id;
+      document.getElementById('api-custom-model').value = '';
+      list.querySelectorAll('.model-tag').forEach(t => t.classList.remove('sel'));
+      tag.classList.add('sel');
+    };
+    list.appendChild(tag);
+  });
+  // Custom models (gray)
+  cms.forEach(cm => {
+    const tag = document.createElement('span');
+    tag.className = 'model-tag' + (cm.id === selectedModelId ? ' sel' : '');
+    tag.textContent = cm.label;
+    tag.style.opacity = '0.6';
+    tag.style.fontStyle = 'italic';
+    tag.onclick = () => {
+      selectedModelId = cm.id;
+      document.getElementById('api-custom-model').value = '';
+      list.querySelectorAll('.model-tag').forEach(t => t.classList.remove('sel'));
+      tag.classList.add('sel');
+    };
+    list.appendChild(tag);
+  });
+}
+
+// ===== API Eye Toggle =====
+document.getElementById('api-eye-btn').onclick = () => {
+  const inp = document.getElementById('api-key-input');
+  const isPassword = inp.type === 'password';
+  inp.type = isPassword ? 'text' : 'password';
+  document.getElementById('api-eye-btn').innerHTML = isPassword
+    ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
+    : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+};
+
+// ===== API Settings Modal =====
+document.getElementById('open-api-settings').onclick = () => document.getElementById('api-overlay').classList.add('open');
+document.getElementById('api-close').onclick = () => document.getElementById('api-overlay').classList.remove('open');
+document.getElementById('api-overlay').onclick = (e) => { if (e.target.id === 'api-overlay') e.target.classList.remove('open'); };
+
+document.getElementById('api-save').onclick = () => {
+  const key = document.getElementById('api-key-input').value.trim();
+  const customModelInput = document.getElementById('api-custom-model').value.trim();
+  const localUrl = document.getElementById('api-local-url').value.trim();
+  if (!selectedProviderId) return showApiStatus('请选择服务商', true);
+  if (!key) return showApiStatus('请输入 API Key', true);
+  const p = PROVIDERS.find(x => x.id === selectedProviderId);
+  const modelId = customModelInput || selectedModelId || p?.models[0]?.id || '';
+  const baseUrl = selectedProviderId === 'local' ? (localUrl || p?.apiBaseUrl) : p?.apiBaseUrl;
+  // Track custom model
+  if (customModelInput && p) {
+    if (!customModels[p.id]) customModels[p.id] = [];
+    if (!customModels[p.id].find(m => m.id === customModelInput)) {
+      customModels[p.id].push({ id: customModelInput, label: customModelInput });
+    }
+  }
+  const cfg = {
+    providerId: selectedProviderId,
+    apiKey: key,
+    baseUrl,
+    selectedModelId: customModelInput ? '' : modelId,
+    customModel: customModelInput,
+    localServiceUrl: localUrl,
+    userName,
+    theme: localStorage.getItem('ibwhale_theme') || '#2a2a2a',
+    customModels,
+  };
+  savedConfig = cfg; apiKey = key; customModel = customModelInput; localServiceUrl = localUrl;
+  persistConfig();
+  // Update model dropdown — only show this provider's models
+  selectedModelId = modelId;
+  updateModelDropdown(p);
+  updateSidebarUser(p, modelId, customModelInput);
+  // Refresh provider grid badges
+  grid.querySelectorAll('.api-provider-item').forEach(el => {
+    el.classList.toggle('configured', el.dataset.id === selectedProviderId);
+    const badge = el.querySelector('.provider-badge');
+    if (badge) badge.remove();
+    if (el.dataset.id === selectedProviderId) {
+      const b = document.createElement('span');
+      b.className = 'provider-badge';
+      b.textContent = '已配置';
+      el.appendChild(b);
+    }
+  });
+  showApiStatus('配置已保存 ✓', false);
+  // Apply model env via main process (restarts PTY)
+  if (window.electronAPI && window.electronAPI.setModelEnv) {
+    window.electronAPI.setModelEnv({ apiKey: key, baseUrl, model: modelId });
+  }
+  setTimeout(() => document.getElementById('api-overlay').classList.remove('open'), 800);
+};
+
+document.getElementById('api-clear-btn').onclick = async () => {
+  localStorage.removeItem('ibwhale_api_config');
+  savedConfig = null; apiKey = ''; selectedProviderId = ''; selectedModelId = ''; customModel = ''; localServiceUrl = ''; customModels = {};
+  if (window.electronAPI && window.electronAPI.saveConfig) {
+    try { await window.electronAPI.saveConfig(null); } catch {}
+  }
+  grid.querySelectorAll('.api-provider-item').forEach(el => { el.classList.remove('active','configured'); el.querySelector('.provider-badge')?.remove(); });
+  document.getElementById('api-key-input').value = '';
+  document.getElementById('api-custom-model').value = '';
+  document.getElementById('api-local-url').value = '';
+  document.getElementById('local-service-group').style.display = 'none';
+  document.getElementById('api-models-section').style.display = 'none';
+  document.getElementById('model-dropdown').innerHTML = '';
+  document.getElementById('model-label').textContent = '选择模型';
+  document.getElementById('sidebar-api-dot').style.display = 'none';
+  showApiStatus('已清除', false);
+};
+
+function showApiStatus(msg, isErr) {
+  const el = document.getElementById('api-status');
+  el.textContent = msg; el.style.display = 'block';
+  el.className = 'api-status ' + (isErr ? 'err' : 'ok');
+  setTimeout(() => el.style.display = 'none', 2000);
+}
+
+// ===== Model Dropdown =====
+function updateModelDropdown(provider) {
+  const dd = document.getElementById('model-dropdown');
+  dd.innerHTML = '';
+  const p = provider || PROVIDERS.find(x => x.id === savedConfig?.providerId);
+  if (customModel && p) {
+    const el = document.createElement('div');
+    el.className = 'model-option active';
+    el.innerHTML = `<div class="model-main-row"><span class="model-name">${customModel}</span></div><div class="model-desc-row">自定义模型</div>`;
+    dd.appendChild(el);
+    document.getElementById('model-label').textContent = customModel;
+    return;
+  }
+  // 有配置: 只显示该服务商; 无配置: 显示全部
+  const providers = p ? [p] : PROVIDERS;
+  providers.forEach(prov => {
+  prov.models.forEach(m => {
+    const el = document.createElement('div');
+    el.className = 'model-option' + (m.id === selectedModelId ? ' active' : '');
+    el.innerHTML = `<div class="model-main-row"><span class="model-name">${m.label}</span><span class="model-date">${m.date}</span><span class="model-rating">⭐ ${m.rating}</span><span class="model-price">$${m.price}/M</span>${m.id===selectedModelId?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10a37f" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>':''}</div><div class="model-desc-row">${m.desc}</div>`;
+    el.onclick = () => {
+      selectedModelId = m.id;
+      document.getElementById('model-label').textContent = m.label;
+      dd.querySelectorAll('.model-option').forEach(o => o.classList.remove('active'));
+      el.classList.add('active');
+      dd.classList.remove('open');
+      document.getElementById('model-chevron').style.transform = '';
+      // Switch model via env
+      const p = PROVIDERS.find(x => x.id === savedConfig?.providerId);
+      if (p && savedConfig?.apiKey) {
+        applyModelEnv(savedConfig.apiKey, p.apiBaseUrl, m.id);
+      }
+    };
+    dd.appendChild(el);
+  });
+  // Custom models for this provider
+  const cms = customModels[prov.id] || [];
+  cms.forEach(cm => {
+    const el = document.createElement('div');
+    el.className = 'model-option' + (cm.id === selectedModelId ? ' active' : '');
+    el.innerHTML = `<div class="model-main-row"><span class="model-name" style="opacity:0.6;font-style:italic">${cm.label}</span><span class="model-date">自定义</span></div>`;
+    el.onclick = () => {
+      selectedModelId = cm.id;
+      document.getElementById('model-label').textContent = cm.label;
+      dd.querySelectorAll('.model-option').forEach(o => o.classList.remove('active'));
+      el.classList.add('active');
+      dd.classList.remove('open');
+      document.getElementById('model-chevron').style.transform = '';
+      const p = PROVIDERS.find(x => x.id === savedConfig?.providerId);
+      if (p && savedConfig?.apiKey) {
+        applyModelEnv(savedConfig.apiKey, p.apiBaseUrl, cm.id);
+      }
+    };
+    dd.appendChild(el);
+  });
+  }); // end providers.forEach
+}
+
+document.getElementById('model-btn').onclick = (e) => {
+  e.stopPropagation();
+  document.getElementById('model-dropdown').classList.toggle('open');
+  document.getElementById('model-chevron').style.transform = document.getElementById('model-dropdown').classList.contains('open') ? 'rotate(180deg)' : '';
+};
+document.addEventListener('click', () => {
+  document.getElementById('model-dropdown').classList.remove('open');
+  document.getElementById('model-chevron').style.transform = '';
+});
+
+function updateSidebarUser(p, modelId, customModelName) {
+  const dot = document.getElementById('sidebar-api-dot');
+  if (p) {
+    document.getElementById('model-label').textContent = customModelName || (p.models.find(x => x.id === modelId)?.label) || p.label;
+    dot.style.display = 'block';
+    dot.style.background = '#10a37f';
+    dot.style.boxShadow = '0 0 6px rgba(16,163,127,0.5)';
+  }
+}
+
+// ===== Apply model env (restarts PTY) =====
+function applyModelEnv(apiKey, baseUrl, model) {
+  if (window.electronAPI && window.electronAPI.setModelEnv) {
+    window.electronAPI.setModelEnv({ apiKey, baseUrl, model });
+  }
+}
+
+// Init
+(async function init() {
+  await loadConfigFromFile();
+  await initConversations();
+  initUserName();
+  if (!userName) { showNameOverlay(); } else { updateUserName(); }
+  if (savedConfig) {
+    const p = PROVIDERS.find(x => x.id === savedConfig.providerId);
+    if (p) {
+      const m = p.models.find(x => x.id === savedConfig.selectedModelId);
+      const label = savedConfig.customModel || (m ? m.label : p.label);
+      document.getElementById('model-label').textContent = label;
+      updateSidebarUser(p, savedConfig.selectedModelId, savedConfig.customModel);
+      updateModelDropdown(p);
+      selectProvider(savedConfig.providerId);
+      // PTY already spawned with correct env at startup, no need to restart
+      // setTimeout(() => applyModelEnv(savedConfig.apiKey, p.apiBaseUrl, label), 1500);
+    }
+  } else {
+    updateModelDropdown();
+  }
+})();
+
+// ===== 底色切换 =====
+function applyTheme(bg) {
+  document.documentElement.style.setProperty('--bg', bg);
+  // 根据底色调整关联颜色
+  const themes = {
+    '#1a1a1a': { sidebar:'#171717', card:'#2a2a2a', input:'#353535', hover:'#333', border:'#333' },
+    '#2a2a2a': { sidebar:'#222222', card:'#353535', input:'#404040', hover:'#3a3a3a', border:'#404040' },
+    '#1e293b': { sidebar:'#172033', card:'#2a3a50', input:'#354560', hover:'#333d50', border:'#333d50' },
+    '#1a2e1a': { sidebar:'#152615', card:'#2a402a', input:'#354a35', hover:'#334a33', border:'#334a33' },
+    '#2e1a2e': { sidebar:'#251525', card:'#402a40', input:'#4a354a', hover:'#4a334a', border:'#4a334a' },
+  };
+  const t = themes[bg] || themes['#2a2a2a'];
+  document.documentElement.style.setProperty('--bg-sidebar', t.sidebar);
+  document.documentElement.style.setProperty('--bg-card', t.card);
+  document.documentElement.style.setProperty('--bg-input', t.input);
+  document.documentElement.style.setProperty('--bg-hover', t.hover);
+  document.documentElement.style.setProperty('--border', t.border);
+  localStorage.setItem('ibwhale_theme', bg);
+  persistConfig();
+  document.querySelectorAll('.theme-dot').forEach(d => d.classList.toggle('active', d.dataset.bg === bg));
+}
+document.querySelectorAll('.theme-dot').forEach(dot => {
+  dot.onclick = () => applyTheme(dot.dataset.bg);
+});
+applyTheme(localStorage.getItem('ibwhale_theme') || '#2a2a2a');
+
+// ===== Help Modal =====
+document.getElementById('help-btn').onclick = () => {
+  document.getElementById('help-overlay').classList.add('open');
+};
+document.getElementById('help-close').onclick = () => {
+  document.getElementById('help-overlay').classList.remove('open');
+};
+document.getElementById('help-overlay').onclick = (e) => {
+  if (e.target.id === 'help-overlay') e.target.classList.remove('open');
+};
+
+// ===== Avatar color cycle =====
+const AVATAR_COLORS = ['#10a37f','#3b82f6','#8b5cf6','#f59e0b','#ef4444','#ec4899','#06b6d4'];
+let avatarColorIdx = 0;
+document.getElementById('avatar-cycle').onclick = () => {
+  avatarColorIdx = (avatarColorIdx + 1) % AVATAR_COLORS.length;
+  const c = AVATAR_COLORS[avatarColorIdx];
+  document.getElementById('avatar-cycle').style.borderColor = c;
+  localStorage.setItem('ibwhale_avatar_color', c);
+};
+(function restoreAvatarColor() {
+  const c = localStorage.getItem('ibwhale_avatar_color');
+  if (c) {
+    document.getElementById('avatar-cycle').style.borderColor = c;
+    avatarColorIdx = AVATAR_COLORS.indexOf(c);
+  }
+})();
+
+// ===== Conversation Management =====
+let conversations = [];
+let activeConvId = null;
+let conversationBuffers = {}; // { convId: string } - save terminal output per conversation
+
+// Save current terminal buffer before switching
+function saveCurrentBuffer() {
+  if (!terminal || !activeConvId) return;
+  const buf = terminal.buffer.active;
+  let lines = '';
+  for (let i = 0; i < buf.length; i++) {
+    const line = buf.getLine(i);
+    if (line) {
+      lines += line.translateToString(true) + '\n';
+    }
+  }
+  conversationBuffers[activeConvId] = lines;
+}
+
+// Load a conversation's buffer into terminal
+function loadConversationBuffer(convId) {
+  if (!terminal) return;
+  terminal.clear();
+  const buf = conversationBuffers[convId];
+  if (buf) {
+    const lines = buf.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      if (i > 0) terminal.writeln('');
+      const line = lines[i];
+      if (line) terminal.write(line);
+    }
+  }
+}
+
+// Render sidebar conversation list
+function renderConversations() {
+  const list = document.getElementById('sidebar-list');
+  list.innerHTML = '';
+  if (conversations.length === 0) {
+    list.innerHTML = '<div class="sidebar-empty">暂无对话历史</div>';
+    return;
+  }
+  conversations.forEach(conv => {
+    const el = document.createElement('div');
+    el.className = 'sidebar-item' + (conv.id === activeConvId ? ' active' : '');
+    el.dataset.id = conv.id;
+    el.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;opacity:0.6"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <span class="sidebar-item-title">${conv.title}</span>
+      <button class="sidebar-item-close" title="关闭对话">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>`;
+
+    // Click to switch
+    el.onclick = (e) => {
+      if (e.target.closest('.sidebar-item-close')) return;
+      switchConversation(conv.id);
+    };
+
+    // Double-click to rename
+    el.ondblclick = (e) => {
+      if (e.target.closest('.sidebar-item-close')) return;
+      startRename(conv.id, el);
+    };
+
+    // Close button
+    el.querySelector('.sidebar-item-close').onclick = (e) => {
+      e.stopPropagation();
+      closeConversation(conv.id);
+    };
+
+    list.appendChild(el);
+  });
+}
+
+function startRename(convId, el) {
+  const titleSpan = el.querySelector('.sidebar-item-title');
+  const currentTitle = conversations.find(c => c.id === convId)?.title || '';
+  const input = document.createElement('input');
+  input.className = 'sidebar-item-rename';
+  input.value = currentTitle;
+  titleSpan.replaceWith(input);
+  input.focus();
+  input.select();
+
+  const finishRename = () => {
+    const newTitle = input.value.trim() || currentTitle;
+    window.electronAPI.renameConv(convId, newTitle);
+    const conv = conversations.find(c => c.id === convId);
+    if (conv) conv.title = newTitle;
+    renderConversations();
+  };
+
+  input.onblur = finishRename;
+  input.onkeydown = (e) => {
+    if (e.key === 'Enter') input.blur();
+    if (e.key === 'Escape') { input.value = currentTitle; input.blur(); }
+  };
+}
+
+async function newConversation() {
+  saveCurrentBuffer();
+  const result = await window.electronAPI.newConv();
+  if (result.ok) {
+    activeConvId = result.id;
+    const list = await window.electronAPI.getConvList();
+    conversations = list;
+    renderConversations();
+    // 刷新终端尺寸，修复内容显示
+    terminal.clear();
+    window.fitAddon.fit();
+    window.electronAPI.sendResize(terminal.cols, terminal.rows);
+  }
+}
+
+async function switchConversation(convId) {
+  if (convId === activeConvId) return;
+  saveCurrentBuffer();
+  activeConvId = convId;
+  await window.electronAPI.switchConv(convId);
+  const list = await window.electronAPI.getConvList();
+  conversations = list;
+  renderConversations();
+  terminal.clear();
+  loadConversationBuffer(convId);
+  // 刷新终端尺寸
+  window.fitAddon.fit();
+  window.electronAPI.sendResize(terminal.cols, terminal.rows);
+}
+
+async function closeConversation(convId) {
+  if (convId === activeConvId) {
+    const others = conversations.filter(c => c.id !== convId);
+    if (others.length > 0) {
+      saveCurrentBuffer();
+      await window.electronAPI.deleteConv(convId);
+      conversations = conversations.filter(c => c.id !== convId);
+      activeConvId = others[0].id;
+      await window.electronAPI.switchConv(activeConvId);
+      renderConversations();
+      loadConversationBuffer(activeConvId);
+    } else {
+      saveCurrentBuffer();
+      await window.electronAPI.deleteConv(convId);
+      conversations = conversations.filter(c => c.id !== convId);
+      await newConversation();
+      return;
+    }
+  } else {
+    saveCurrentBuffer();
+    delete conversationBuffers[convId];
+    await window.electronAPI.deleteConv(convId);
+    conversations = conversations.filter(c => c.id !== convId);
+    renderConversations();
+  }
+}
+
+// Listen for PTY exit
+if (window.electronAPI.onConvExit) {
+  window.electronAPI.onConvExit((convId) => {
+    const conv = conversations.find(c => c.id === convId);
+    if (conv) { conv.pid = null; renderConversations(); }
+  });
+}
+
+// New chat button (override renderer.ts handler after it runs)
+setTimeout(() => {
+  document.getElementById('btn-new-chat').onclick = () => newConversation();
+}, 100);
+
+// Init conversations
+async function initConversations() {
+  const list = await window.electronAPI.getConvList();
+  conversations = list;
+  if (list.length > 0) {
+    activeConvId = list.find(c => c.active)?.id || list[0].id;
+  }
+  renderConversations();
+}
+
+// Error handling
+var errText = document.getElementById('err-text'), errOverlay = document.getElementById('err-overlay');
+window.onerror = (msg, src, line) => { errOverlay.style.display='block'; errText.textContent=msg+'\n'+(src||'')+':'+line; };
+window.addEventListener('unhandledrejection', e => { errOverlay.style.display='block'; errText.textContent='Promise: '+(e.reason?.message||e.reason); });
+document.getElementById('err-copy').onclick = function() { navigator.clipboard.writeText(errText.textContent); this.textContent='已复制'; setTimeout(()=>this.textContent='复制',1500); };
+document.getElementById('err-close').onclick = () => errOverlay.style.display='none';
+</script>
+</body>
+</html>

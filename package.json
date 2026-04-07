@@ -1,0 +1,25 @@
+{
+  "name": "ibwhale",
+  "version": "1.3.0",
+  "description": "ibwhale Claude Code Desktop - 基于 Electron + node-pty 的桌面端 AI 编程助手",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "npx electron .",
+    "build:renderer": "node build-renderer.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/ibwhale"
+  },
+  "keywords": ["claude-code", "electron", "pty", "ai", "coding-assistant"],
+  "author": "ibwhale",
+  "license": "MIT",
+  "dependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "node-pty": "^1.1.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}
