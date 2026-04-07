@@ -7,6 +7,9 @@ const path = require('path');
 const fs = require('fs');
 const https = require('https');
 const http = require('http');
+const { spawn } = require('child_process');
+const os = require('os');
+const zlib = require('zlib');
 
 // ===== 本地配置持久化 =====
 const CONFIG_DIR = path.join(app.getPath('userData'), 'ibwhale');
@@ -373,6 +376,166 @@ function githubRequest(host, path) {
     req.setTimeout(10000, () => { req.destroy(); reject(new Error('请求超时')); });
     req.end();
   });
+}
+
+// ===== 自动更新 =====
+const UPDATE_PROGRESS_INTERVAL = 500;
+
+// 文件不更新列表
+const SKIP_FILES = ['.env', 'config.json', 'error.log', 'node_modules', '.git', '.gitignore', 'package-lock.json'];
+
+ipcMain.handle('auto-update', async () => {
+  try {
+    // 1. 获取最新版本信息
+    const release = await githubRequest(GITHUB_API, GITHUB_REPO);
+    if (!release || !release.tag_name) return { ok: false, error: '获取版本失败' };
+
+    const latestTag = release.tag_name.replace(/^v/, '');
+    if (compareVersions(latestTag, APP_VERSION) <= 0) {
+      return { ok: true, message: '已是最新版本' };
+    }
+
+    // 2. 找到 ZIP 资产
+    const zipAsset = (release.assets || []).find(a => a.name.endsWith('.zip') && a.name.includes('Source') || a.name.includes('source'));
+    if (!zipAsset) return { ok: false, error: '未找到 ZIP 更新包' };
+
+    // 3. 下载 ZIP 到临时目录
+    const tmpDir = path.join(os.tmpdir(), 'ibwhale-update-' + Date.now());
+    fs.mkdirSync(tmpDir, { recursive: true });
+    const zipPath = path.join(tmpDir, 'update.zip');
+
+    await downloadFile(zipAsset.browser_download_url, zipPath, (pct) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-progress', { stage: 'downloading', progress: pct });
+      }
+    });
+
+    // 4. 解压
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-progress', { stage: 'extracting', progress: 0 });
+    }
+    const extractDir = path.join(tmpDir, 'extracted');
+    await extractZip(zipPath, extractDir);
+
+    // 5. 找到解压后的文件夹（通常是 CC-ibwhale-xxx/）
+    const updateDir = fs.readdirSync(extractDir).find(f => fs.statSync(path.join(extractDir, f)).isDirectory());
+    if (!updateDir) return { ok: false, error: '解压后未找到更新目录' };
+    const sourceDir = path.join(extractDir, updateDir);
+
+    // 6. 复制文件（跳过不需要更新的文件）
+    const targetDir = path.join(__dirname);
+    await copyUpdateFiles(sourceDir, targetDir);
+
+    // 7. 清理临时文件
+    cleanupTemp(tmpDir);
+
+    // 8. 重启应用
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-progress', { stage: 'restarting', progress: 100 });
+    }
+    // 延迟重启确保 UI 能显示完成状态
+    setTimeout(() => {
+      app.relaunch();
+      app.quit();
+    }, 1500);
+
+    return { ok: true, version: latestTag };
+  } catch (err) {
+    console.error('[ibwhale] 自动更新失败:', err.message, err.stack);
+    return { ok: false, error: err.message };
+  }
+});
+
+function downloadFile(url, dest, onProgress) {
+  return new Promise((resolve, reject) => {
+    const transport = url.startsWith('https') ? https : http;
+    transport.get(url, { headers: { 'User-Agent': 'ibwhale' } }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        transport.get(res.headers.location, { headers: { 'User-Agent': 'ibwhale' } }, (res2) => {
+          doDownload(res2, dest, onProgress).then(resolve).catch(reject);
+        }).on('error', reject);
+        return;
+      }
+      doDownload(res, dest, onProgress).then(resolve).catch(reject);
+    }).on('error', reject);
+  });
+}
+
+function doDownload(res, dest, onProgress) {
+  return new Promise((resolve, reject) => {
+    const total = parseInt(res.headers['content-length'] || '0', 10);
+    let downloaded = 0;
+    const file = fs.createWriteStream(dest);
+    let lastProgress = 0;
+
+    res.on('data', (chunk) => {
+      downloaded += chunk.length;
+      if (total > 0) {
+        const pct = Math.round((downloaded / total) * 100);
+        if (pct !== lastProgress) {
+          lastProgress = pct;
+          onProgress(pct);
+        }
+      }
+    });
+
+    res.pipe(file);
+    file.on('finish', () => {
+      file.close();
+      resolve();
+    });
+    file.on('error', (err) => {
+      fs.unlink(dest, () => {});
+      reject(err);
+    });
+  });
+}
+
+function extractZip(zipPath, destDir) {
+  return new Promise((resolve, reject) => {
+    // 使用 PowerShell 解压（Windows 内置）
+    const psCmd = `Expand-Archive -Path '${zipPath.replace(/'/g, "''")}' -DestinationPath '${destDir.replace(/'/g, "''")}' -Force`;
+    const ps = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', psCmd], {
+      stdio: ['ignore', 'ignore', 'pipe'],
+    });
+
+    let stderr = '';
+    ps.stderr.on('data', (d) => (stderr += d.toString()));
+
+    ps.on('close', (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`PowerShell 解压失败: ${stderr.slice(0, 300)}`));
+      }
+    });
+    ps.on('error', reject);
+  });
+}
+
+function copyUpdateFiles(srcDir, targetDir) {
+  const items = fs.readdirSync(srcDir);
+  for (const item of items) {
+    if (SKIP_FILES.includes(item)) continue;
+    const srcPath = path.join(srcDir, item);
+    const targetPath = path.join(targetDir, item);
+    const stat = fs.statSync(srcPath);
+
+    if (stat.isDirectory()) {
+      fs.mkdirSync(targetPath, { recursive: true });
+      copyUpdateFiles(srcPath, targetPath);
+    } else {
+      fs.copyFileSync(srcPath, targetPath);
+    }
+  }
+}
+
+function cleanupTemp(dir) {
+  try {
+    if (fs.existsSync(dir)) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  } catch {}
 }
 
 // ===== 翻译 (主进程，无 CORS 限制) =====

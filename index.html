@@ -366,7 +366,7 @@
 <div class="watermark" id="watermark">
   <a class="watermark-site" href="javascript:void(0);" onclick="window.electronAPI.openUrl('https://ibwhale.com/profile/3720008');" style="display:flex;align-items:center;gap:4px;background:rgba(16,163,127,0.1);border:1px solid rgba(16,163,127,0.3);border-radius:6px;padding:3px 10px;cursor:pointer;text-decoration:none;pointer-events:auto;z-index:1;position:relative;">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-    <span>作者主页: ibwhale.com/profile/3720008</span>
+    <span>作者主页: ibwhale.com</span>
   </a>
   </a>
   <span class="watermark-copy" style="margin-top:4px;">ibwhale v1.3 · Copyright © 2026</span>
@@ -1039,8 +1039,6 @@ function checkForUpdate(showAlways) {
       }
       return;
     }
-    const assets = result.assets || [];
-    const zipAsset = assets.find(a => a.name.endsWith('.zip'));
     body.innerHTML = `
       <p>发现新版本: <span class="version-tag">v${result.latest}</span></p>
       <div class="current-ver">当前版本: v${result.current}</div>
@@ -1048,10 +1046,62 @@ function checkForUpdate(showAlways) {
       <div class="release-notes">${result.body}</div>
       <div class="update-actions">
         <button class="update-btn-secondary" onclick="document.getElementById('update-overlay').classList.remove('open')">稍后</button>
-        <button class="update-btn-primary" onclick="window.open('${result.htmlUrl}','_blank')">前往下载</button>
-      </div>`;
+        <button class="update-btn-primary" onclick="doAutoUpdate()">自动更新并重启</button>
+      </div>
+      <p style="text-align:center;margin-top:8px;"><a href="${result.htmlUrl}" onclick="event.preventDefault(); window.electronAPI.openUrl('${result.htmlUrl}');" style="color:var(--accent);font-size:12px;">或手动前往下载 →</a></p>`;
   }).catch(err => {
     body.innerHTML = `<p style="color:var(--error)">检查失败: ${err.message || err}</p>`;
+  });
+}
+
+function doAutoUpdate() {
+  const body = document.getElementById('update-body');
+  body.innerHTML = `
+    <div style="text-align:center;padding:20px 0;">
+      <div class="update-spinner"></div><br>
+      <span id="update-status">开始下载...</span>
+      <div style="margin-top:12px;background:var(--bg-input);border-radius:6px;height:8px;overflow:hidden;">
+        <div id="update-bar" style="height:100%;background:var(--accent);width:0%;transition:width 0.3s;"></div>
+      </div>
+      <div id="update-pct" style="margin-top:4px;font-size:11px;color:var(--text-sub);">0%</div>
+    </div>`;
+
+  window.electronAPI.autoUpdate().then(result => {
+    if (!result.ok) {
+      body.innerHTML = `<p style="color:var(--error)">更新失败: ${result.error}</p>
+        <div class="update-actions">
+          <button class="update-btn-secondary" onclick="document.getElementById('update-overlay').classList.remove('open')">关闭</button>
+        </div>`;
+    }
+  }).catch(err => {
+    body.innerHTML = `<p style="color:var(--error)">更新失败: ${err.message || err}</p>
+      <div class="update-actions">
+        <button class="update-btn-secondary" onclick="document.getElementById('update-overlay').classList.remove('open')">关闭</button>
+      </div>`;
+  });
+}
+
+// Listen for update progress
+if (window.electronAPI.onUpdateProgress) {
+  window.electronAPI.onUpdateProgress((data) => {
+    const statusEl = document.getElementById('update-status');
+    const barEl = document.getElementById('update-bar');
+    const pctEl = document.getElementById('update-pct');
+    if (!statusEl) return;
+
+    if (data.stage === 'downloading') {
+      statusEl.textContent = '下载更新中...';
+      barEl.style.width = data.progress + '%';
+      pctEl.textContent = data.progress + '%';
+    } else if (data.stage === 'extracting') {
+      statusEl.textContent = '解压更新...';
+      barEl.style.width = '90%';
+      pctEl.textContent = '90%';
+    } else if (data.stage === 'restarting') {
+      statusEl.textContent = '即将重启...';
+      barEl.style.width = '100%';
+      pctEl.textContent = '100%';
+    }
   });
 }
 
@@ -1060,16 +1110,19 @@ setTimeout(() => {
   if (window.electronAPI && window.electronAPI.checkUpdate) {
     window.electronAPI.checkUpdate().then(result => {
       if (result?.ok && result.hasUpdate) {
-        // Show a subtle notification
-        const watermark = document.querySelector('.watermark');
-        if (watermark) {
-          const notif = document.createElement('div');
-          notif.style.cssText = 'position:fixed;bottom:30px;right:12px;background:var(--accent);color:#fff;padding:6px 12px;border-radius:8px;font-size:11px;cursor:pointer;z-index:300;opacity:0.9;';
-          notif.textContent = `发现新版本 v${result.latest}`;
-          notif.onclick = () => { notif.remove(); checkForUpdate(true); };
-          document.body.appendChild(notif);
-          setTimeout(() => { if (notif.parentNode) notif.remove(); }, 8000);
-        }
+        const notif = document.createElement('div');
+        notif.style.cssText = 'position:fixed;bottom:50px;right:12px;background:var(--accent);color:#fff;padding:6px 12px;border-radius:8px;font-size:11px;cursor:pointer;z-index:300;opacity:0.9;display:flex;flex-direction:column;gap:4px;';
+        const textEl = document.createElement('span');
+        textEl.textContent = `发现新版本 v${result.latest}`;
+        textEl.onclick = () => { notif.remove(); checkForUpdate(true); };
+        const updateEl = document.createElement('button');
+        updateEl.textContent = '立即更新';
+        updateEl.style.cssText = 'background:#fff;color:var(--accent);border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:10px;font-weight:600;';
+        updateEl.onclick = () => { notif.remove(); checkForUpdate(true); setTimeout(() => doAutoUpdate(), 300); };
+        notif.appendChild(textEl);
+        notif.appendChild(updateEl);
+        document.body.appendChild(notif);
+        setTimeout(() => { if (notif.parentNode) notif.remove(); }, 12000);
       }
     }).catch(() => {});
   }

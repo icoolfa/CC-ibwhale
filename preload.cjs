@@ -41,4 +41,10 @@ window.electronAPI = {
   checkUpdate: () => ipcRenderer.invoke('check-update'),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   openUrl: (url) => ipcRenderer.send('open-url', url),
+  autoUpdate: () => ipcRenderer.invoke('auto-update'),
+  onUpdateProgress: (cb) => {
+    const h = (_e, data) => cb(data);
+    ipcRenderer.on('update-progress', h);
+    return () => ipcRenderer.removeListener('update-progress', h);
+  },
 };
