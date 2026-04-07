@@ -2,7 +2,7 @@
  * ibwhale Claude Code Desktop - Main Process
  * 单实例锁 + 多PTY会话管理 + node-pty
  */
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
@@ -185,6 +185,12 @@ function createWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
+
+  // 允许渲染进程用 target="_blank" 打开外部链接
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
 
   // 捕获渲染进程控制台输出写入文件
   const logFile = path.join(__dirname, 'error.log');
