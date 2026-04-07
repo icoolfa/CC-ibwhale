@@ -363,10 +363,11 @@
 </div>
 
 <!-- Watermark -->
-<div class="watermark">
-  <a class="watermark-site" href="#" onclick="event.preventDefault(); window.electronAPI.openUrl('https://ibwhale.com/profile/3720008'); return false;" style="display:flex;align-items:center;gap:4px;background:rgba(16,163,127,0.1);border:1px solid rgba(16,163,127,0.3);border-radius:6px;padding:3px 10px;cursor:pointer;text-decoration:none;">
+<div class="watermark" id="watermark">
+  <a class="watermark-site" href="javascript:void(0);" onclick="window.electronAPI.openUrl('https://ibwhale.com/profile/3720008');" style="display:flex;align-items:center;gap:4px;background:rgba(16,163,127,0.1);border:1px solid rgba(16,163,127,0.3);border-radius:6px;padding:3px 10px;cursor:pointer;text-decoration:none;pointer-events:auto;z-index:1;position:relative;">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
     <span>作者主页: ibwhale.com/profile/3720008</span>
+  </a>
   </a>
   <span class="watermark-copy" style="margin-top:4px;">ibwhale v1.3 · Copyright © 2026</span>
 </div>
