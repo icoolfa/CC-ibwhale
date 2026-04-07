@@ -395,8 +395,12 @@ ipcMain.handle('auto-update', async () => {
       return { ok: true, message: '已是最新版本' };
     }
 
-    // 2. 找到 ZIP 资产
-    const zipAsset = (release.assets || []).find(a => a.name.endsWith('.zip') && a.name.includes('Source') || a.name.includes('source'));
+    // 2. 找到 ZIP 资产（优先 ibwhale.zip，其次 Source code）
+    const zipAsset = (release.assets || []).find(a => {
+      if (a.name === 'ibwhale.zip') return true;
+      if (a.name.endsWith('.zip') && (a.name.includes('Source') || a.name.includes('source'))) return true;
+      return false;
+    });
     if (!zipAsset) return { ok: false, error: '未找到 ZIP 更新包' };
 
     // 3. 下载 ZIP 到临时目录
