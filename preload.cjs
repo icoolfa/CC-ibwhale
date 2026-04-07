@@ -40,4 +40,5 @@ window.electronAPI = {
   },
   checkUpdate: () => ipcRenderer.invoke('check-update'),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  openUrl: (url) => ipcRenderer.send('open-url', url),
 };

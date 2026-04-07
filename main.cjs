@@ -192,6 +192,11 @@ function createWindow() {
     return { action: 'deny' };
   });
 
+  // 渲染进程通过 IPC 打开外部链接
+  ipcMain.on('open-url', (_event, url) => {
+    shell.openExternal(url);
+  });
+
   // 捕获渲染进程控制台输出写入文件
   const logFile = path.join(__dirname, 'error.log');
   mainWindow.webContents.on('console-message', (level, message, line, source) => {
