@@ -199,7 +199,7 @@
     .err-text { margin: 0; color: #fca5a5; font-size: 12px; font-family: monospace; line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
 
     /* ── Watermark Footer ── */
-    .watermark { position: fixed; bottom: 8px; right: 12px; z-index: 300; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; pointer-events: none; opacity: 0.5; transition: opacity 0.2s; }
+    .watermark { position: fixed; bottom: 8px; right: 12px; z-index: 9999; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; pointer-events: auto; opacity: 0.5; transition: opacity 0.2s; }
     .watermark:hover { opacity: 0.85; pointer-events: auto; }
     .watermark a { font-size: 11px; color: var(--accent); text-decoration: none; transition: all 0.15s; }
     .watermark a:hover { color: #34d399; background: rgba(16,163,127,0.15) !important; border-color: var(--accent) !important; }
