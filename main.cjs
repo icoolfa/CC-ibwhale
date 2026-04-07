@@ -62,6 +62,7 @@ function saveLocalConfig(cfg) {
         `ANTHROPIC_BASE_URL=${cfg.baseUrl}`,
         `ANTHROPIC_AUTH_TOKEN=${cfg.apiKey}`,
         `ANTHROPIC_MODEL=${cfg.customModel || cfg.selectedModelId || 'claude-sonnet-4-6'}`,
+        ...(cfg.customApiUrl ? [`CUSTOM_API_URL=${cfg.customApiUrl}`] : []),
         '',
         '# 其他配置',
         'API_TIMEOUT_MS=3000000',

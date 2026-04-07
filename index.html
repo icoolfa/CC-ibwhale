@@ -449,9 +449,13 @@
     <div class="api-provider-grid" id="provider-grid"></div>
     <div class="api-fields">
       <div class="api-input-group" id="local-service-group" style="display:none;">
-        <label>服务地址</label>
+        <label>快捷服务地址</label>
         <div class="local-service-selector" id="local-service-selector"></div>
         <input type="text" id="api-local-url" placeholder="自定义地址，默认 http://localhost:11434" style="margin-top:6px;" />
+      </div>
+      <div class="api-input-group">
+        <label>自定义 API 地址 <span class="optional">可选，留空使用默认</span></label>
+        <input type="text" id="api-custom-url" placeholder="例如: https://api.example.com/v1" />
       </div>
       <div class="api-input-group">
         <label>API Key</label>
@@ -592,6 +596,7 @@ let selectedModelId = '';
 let customModel = '';
 let apiKey = '';
 let localServiceUrl = '';
+let customApiUrl = '';
 let userName = '';
 let customModels = {}; // { providerId: [ {id, label} ] }
 
@@ -606,6 +611,7 @@ async function loadConfigFromFile() {
     customModel = savedConfig.customModel || '';
     apiKey = savedConfig.apiKey || '';
     localServiceUrl = savedConfig.localServiceUrl || '';
+    customApiUrl = savedConfig.customApiUrl || '';
     userName = savedConfig.userName || '';
     customModels = savedConfig.customModels || {};
     const theme = savedConfig.theme || '#2a2a2a';
@@ -619,7 +625,7 @@ async function loadConfigFromFile() {
 async function persistConfig() {
   const cfg = {
     providerId: selectedProviderId,
-    apiKey, baseUrl: '', selectedModelId, customModel, localServiceUrl, userName,
+    apiKey, baseUrl: '', selectedModelId, customModel, localServiceUrl, customApiUrl, userName,
     theme: localStorage.getItem('ibwhale_theme') || '#2a2a2a',
     customModels,
   };
@@ -674,10 +680,12 @@ function selectProvider(id) {
     document.getElementById('api-key-input').value = apiKey;
     document.getElementById('api-custom-model').value = customModel;
     document.getElementById('api-local-url').value = localServiceUrl;
+    document.getElementById('api-custom-url').value = customApiUrl || '';
   } else {
     document.getElementById('api-key-input').value = '';
     document.getElementById('api-custom-model').value = '';
     if (id === 'local') document.getElementById('api-local-url').value = '';
+    document.getElementById('api-custom-url').value = '';
   }
   renderModels(p);
 }
@@ -760,11 +768,20 @@ document.getElementById('api-save').onclick = () => {
   const key = document.getElementById('api-key-input').value.trim();
   const customModelInput = document.getElementById('api-custom-model').value.trim();
   const localUrl = document.getElementById('api-local-url').value.trim();
+  const customUrl = document.getElementById('api-custom-url').value.trim();
   if (!selectedProviderId) return showApiStatus('请选择服务商', true);
   if (!key) return showApiStatus('请输入 API Key', true);
   const p = PROVIDERS.find(x => x.id === selectedProviderId);
   const modelId = customModelInput || selectedModelId || p?.models[0]?.id || '';
-  const baseUrl = selectedProviderId === 'local' ? (localUrl || p?.apiBaseUrl) : p?.apiBaseUrl;
+  // Custom URL overrides default; local provider uses localUrl or customUrl
+  let baseUrl;
+  if (customUrl) {
+    baseUrl = customUrl;
+  } else if (selectedProviderId === 'local') {
+    baseUrl = localUrl || p?.apiBaseUrl;
+  } else {
+    baseUrl = p?.apiBaseUrl;
+  }
   // Track custom model
   if (customModelInput && p) {
     if (!customModels[p.id]) customModels[p.id] = [];
@@ -779,11 +796,12 @@ document.getElementById('api-save').onclick = () => {
     selectedModelId: customModelInput ? '' : modelId,
     customModel: customModelInput,
     localServiceUrl: localUrl,
+    customApiUrl: customUrl,
     userName,
     theme: localStorage.getItem('ibwhale_theme') || '#2a2a2a',
     customModels,
   };
-  savedConfig = cfg; apiKey = key; customModel = customModelInput; localServiceUrl = localUrl;
+  savedConfig = cfg; apiKey = key; customModel = customModelInput; localServiceUrl = localUrl; customApiUrl = customUrl;
   persistConfig();
   // Update model dropdown — only show this provider's models
   selectedModelId = modelId;
@@ -811,7 +829,7 @@ document.getElementById('api-save').onclick = () => {
 
 document.getElementById('api-clear-btn').onclick = async () => {
   localStorage.removeItem('ibwhale_api_config');
-  savedConfig = null; apiKey = ''; selectedProviderId = ''; selectedModelId = ''; customModel = ''; localServiceUrl = ''; customModels = {};
+  savedConfig = null; apiKey = ''; selectedProviderId = ''; selectedModelId = ''; customModel = ''; localServiceUrl = ''; customApiUrl = ''; customModels = {};
   if (window.electronAPI && window.electronAPI.saveConfig) {
     try { await window.electronAPI.saveConfig(null); } catch {}
   }
@@ -819,6 +837,7 @@ document.getElementById('api-clear-btn').onclick = async () => {
   document.getElementById('api-key-input').value = '';
   document.getElementById('api-custom-model').value = '';
   document.getElementById('api-local-url').value = '';
+  document.getElementById('api-custom-url').value = '';
   document.getElementById('local-service-group').style.display = 'none';
   document.getElementById('api-models-section').style.display = 'none';
   document.getElementById('model-dropdown').innerHTML = '';
