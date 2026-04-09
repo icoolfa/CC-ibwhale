@@ -15,7 +15,6 @@ error.log
 .claude/
 
 # Windows
-*.lnk
 Thumbs.db
 
 # OS
