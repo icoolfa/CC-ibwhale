@@ -1,5 +1,5 @@
 /**
- * 444 Claude Code Desktop - Main Process
+ * ibwhale Claude Code Desktop - Main Process
  * 单实例锁 + 多PTY会话管理 + node-pty
  */
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
@@ -12,7 +12,7 @@ const os = require('os');
 const zlib = require('zlib');
 
 // ===== 本地配置持久化 =====
-const CONFIG_DIR = path.join(app.getPath('userData'), '444');
+const CONFIG_DIR = path.join(app.getPath('userData'), 'ibwhale');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 
 function loadLocalConfig() {
@@ -52,7 +52,7 @@ function saveLocalConfig(cfg) {
     if (!fs.existsSync(CONFIG_DIR)) fs.mkdirSync(CONFIG_DIR, { recursive: true });
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg), 'utf-8');
   } catch (err) {
-    console.error('[444] 保存配置失败:', err.message);
+    console.error('[ibwhale] 保存配置失败:', err.message);
   }
   // 同步写入 .env 文件
   if (cfg && cfg.apiKey && cfg.baseUrl) {
@@ -60,7 +60,7 @@ function saveLocalConfig(cfg) {
       const projectRoot = path.join(__dirname, '..');
       const envFile = path.join(projectRoot, '.env');
       const lines = [
-        '# 444 API 配置',
+        '# ibwhale API 配置',
         `MODEL_PROVIDER=${cfg.providerId || 'anthropic'}`,
         `ANTHROPIC_BASE_URL=${cfg.baseUrl}`,
         `ANTHROPIC_AUTH_TOKEN=${cfg.apiKey}`,
@@ -73,9 +73,9 @@ function saveLocalConfig(cfg) {
         'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1',
       ];
       fs.writeFileSync(envFile, lines.join('\n'), 'utf-8');
-      console.log('[444] .env 已更新');
+      console.log('[ibwhale] .env 已更新');
     } catch (err) {
-      console.error('[444] 写入 .env 失败:', err.message);
+      console.error('[ibwhale] 写入 .env 失败:', err.message);
     }
   }
 }
@@ -159,10 +159,10 @@ function spawnPtyForConversation(convId) {
       conv.pid = ptyProcess.pid;
     }
 
-    console.log(`[444] Conv "${convId}" PID:`, ptyProcess.pid);
+    console.log(`[ibwhale] Conv "${convId}" PID:`, ptyProcess.pid);
     return true;
   } catch (err) {
-    console.error(`[444] Conv "${convId}" 启动失败:`, err.message);
+    console.error(`[ibwhale] Conv "${convId}" 启动失败:`, err.message);
     return false;
   }
 }
@@ -408,7 +408,7 @@ ipcMain.handle('config-save', (_event, cfg) => saveLocalConfig(cfg));
 // ===== 检查更新 =====
 const { version: APP_VERSION } = require('./package.json');
 const GITHUB_API = 'api.github.com';
-const GITHUB_REPO = '/repos/icoolfa/CC-444/releases/latest';
+const GITHUB_REPO = '/repos/icoolfa/CC-ibwhale/releases/latest';
 
 ipcMain.handle('get-app-version', () => APP_VERSION);
 
@@ -428,11 +428,11 @@ ipcMain.handle('check-update', async () => {
       latest: latestTag,
       name: result.name || latestTag,
       body: result.body || '',
-      htmlUrl: result.html_url || 'https://github.com/icoolfa/CC-444/releases',
+      htmlUrl: result.html_url || 'https://github.com/icoolfa/CC-ibwhale/releases',
       assets: (result.assets || []).map(a => ({ name: a.name, url: a.browser_download_url, size: a.size })),
     };
   } catch (err) {
-    console.error('[444] 检查更新失败:', err.message);
+    console.error('[ibwhale] 检查更新失败:', err.message);
     return { ok: false, error: err.message };
   }
 });
@@ -454,7 +454,7 @@ function githubRequest(host, path) {
       hostname: host,
       port: 443,
       path,
-      headers: { 'User-Agent': '444', 'Accept': 'application/vnd.github.v3+json' },
+      headers: { 'User-Agent': 'ibwhale', 'Accept': 'application/vnd.github.v3+json' },
     };
     const req = https.request(options, (res) => {
       let data = '';
@@ -500,7 +500,7 @@ ipcMain.handle('auto-update', async () => {
     if (!zipAsset) return { ok: false, error: '未找到 ZIP 更新包' };
 
     // 3. 下载 ZIP 到临时目录
-    const tmpDir = path.join(os.tmpdir(), '444-update-' + Date.now());
+    const tmpDir = path.join(os.tmpdir(), 'ibwhale-update-' + Date.now());
     fs.mkdirSync(tmpDir, { recursive: true });
     const zipPath = path.join(tmpDir, 'update.zip');
 
@@ -527,7 +527,7 @@ ipcMain.handle('auto-update', async () => {
     const extractDir = path.join(tmpDir, 'extracted');
     await extractZip(zipPath, extractDir);
 
-    // 5. 找到解压后的文件夹（通常是 CC-444-xxx/）
+    // 5. 找到解压后的文件夹（通常是 CC-ibwhale-xxx/）
     const updateDir = fs.readdirSync(extractDir).find(f => fs.statSync(path.join(extractDir, f)).isDirectory());
     if (!updateDir) return { ok: false, error: '解压后未找到更新目录' };
     const sourceDir = path.join(extractDir, updateDir);
@@ -549,7 +549,7 @@ ipcMain.handle('auto-update', async () => {
 
     return { ok: true, version: latestTag };
   } catch (err) {
-    console.error('[444] 自动更新失败:', err.message, err.stack);
+    console.error('[ibwhale] 自动更新失败:', err.message, err.stack);
     return { ok: false, error: err.message };
   }
 });
@@ -557,9 +557,9 @@ ipcMain.handle('auto-update', async () => {
 function downloadFile(url, dest, onProgress) {
   return new Promise((resolve, reject) => {
     const transport = url.startsWith('https') ? https : http;
-    transport.get(url, { headers: { 'User-Agent': '444' } }, (res) => {
+    transport.get(url, { headers: { 'User-Agent': 'ibwhale' } }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        transport.get(res.headers.location, { headers: { 'User-Agent': '444' } }, (res2) => {
+        transport.get(res.headers.location, { headers: { 'User-Agent': 'ibwhale' } }, (res2) => {
           doDownload(res2, dest, onProgress).then(resolve).catch(reject);
         }).on('error', reject);
         return;
@@ -710,7 +710,7 @@ ipcMain.handle('translate', async (_event, text) => {
     }
     return result.choices?.[0]?.message?.content?.trim() || '翻译失败';
   } catch (err) {
-    console.error('[444] 翻译请求失败:', err.message);
+    console.error('[ibwhale] 翻译请求失败:', err.message);
     return '翻译失败: ' + err.message;
   }
 });
@@ -748,7 +748,7 @@ function httpRequest(urlStr, body, headers) {
       });
     });
     req.on('error', (e) => {
-      console.error('[444] 翻译请求错误:', e.code, e.message);
+      console.error('[ibwhale] 翻译请求错误:', e.code, e.message);
       reject(new Error(e.message));
     });
     req.on('timeout', () => {
