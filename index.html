@@ -28,9 +28,11 @@
     /* ── Sidebar ── */
     .sidebar { width: var(--sidebar-width); background: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; position: relative; z-index: 50; transition: margin-left 0.25s ease; }
     .sidebar.hide { margin-left: calc(-1 * var(--sidebar-width)); }
-    .sidebar-header { padding: 12px; border-bottom: 1px solid var(--border); }
+    .sidebar-header { padding: 12px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
     .new-chat-btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px; border: 1px dashed var(--border); border-radius: 10px; background: transparent; color: var(--text); font-size: 14px; cursor: pointer; transition: all 0.15s; }
     .new-chat-btn:hover { background: var(--bg-hover); border-color: var(--accent); color: var(--accent); }
+    .new-project-btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px; border: 1px dashed var(--border); border-radius: 10px; background: transparent; color: var(--text); font-size: 14px; cursor: pointer; transition: all 0.15s; }
+    .new-project-btn:hover { background: var(--bg-hover); border-color: #8b5cf6; color: #8b5cf6; }
     .sidebar-list { flex: 1; overflow-y: auto; padding: 8px; }
     .sidebar-item { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 8px; cursor: pointer; font-size: 13px; color: var(--text-sub); transition: all 0.12s; position: relative; }
     .sidebar-item:hover { background: var(--bg-hover); color: var(--text); }
@@ -58,6 +60,8 @@
     .topbar-right { display: flex; align-items: center; gap: 8px; -webkit-app-region: no-drag; }
     .menu-btn { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border: none; background: transparent; color: var(--text-sub); cursor: pointer; border-radius: 8px; transition: all 0.15s; }
     .menu-btn:hover { background: var(--bg-hover); color: var(--text); }
+    .menu-btn.has-badge { position: relative; }
+    .menu-btn .badge { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); font-size: 0; }
     .topbar-brand { font-size: 15px; font-weight: 600; }
     .topbar-status { font-size: 12px; color: var(--accent); animation: pulse 1.5s infinite; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
@@ -85,6 +89,21 @@
     .model-desc-row { font-size: 11px; color: var(--text-sub); margin-top: 2px; margin-left: 2px; }
     .model-option.active .model-name { color: var(--accent); }
     .model-option.active .model-desc-row { color: #6bbfaa; }
+
+    /* ── Plugin Dropdown ── */
+    .plugin-switcher { position: relative; }
+    .plugin-btn { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border: none; background: transparent; color: var(--text-sub); cursor: pointer; border-radius: 8px; transition: all 0.15s; }
+    .plugin-btn:hover { background: var(--bg-hover); color: var(--text); }
+    .plugin-btn.active { color: var(--accent); }
+    .plugin-dropdown { position: absolute; top: calc(100% + 6px); right: 0; width: 280px; max-height: 360px; overflow-y: auto; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 8px; z-index: 100; box-shadow: 0 8px 30px rgba(0,0,0,0.4); display: none; }
+    .plugin-dropdown.open { display: block; }
+    .plugin-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; transition: background 0.12s; }
+    .plugin-item:hover { background: var(--bg-hover); }
+    .plugin-icon { width: 28px; height: 28px; border-radius: 8px; background: var(--bg-input); display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+    .plugin-info { flex: 1; min-width: 0; }
+    .plugin-name { font-size: 13px; font-weight: 600; color: var(--text); }
+    .plugin-desc { font-size: 11px; color: var(--text-sub); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .plugin-empty { text-align: center; color: var(--text-sub); font-size: 12px; padding: 24px 12px; }
 
     /* ── Terminal ── */
     .term-wrap { flex: 1; position: relative; overflow: hidden; min-height: 0; }
@@ -271,6 +290,10 @@
   <!-- Sidebar -->
   <nav class="sidebar" id="sidebar">
     <div class="sidebar-header">
+      <button class="new-project-btn" id="btn-new-project">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 22v-4a4 4 0 0 0-4-4H3"/><path d="M4 22h12"/><path d="M15 2H5a2 2 0 0 0-2 2v4"/><rect x="15" y="2" width="6" height="8" rx="1"/><path d="M21 14l-3 3 3 3"/></svg>
+        新项目
+      </button>
       <button class="new-chat-btn" id="btn-new-chat">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         新对话
@@ -280,7 +303,7 @@
     <div class="sidebar-footer">
       <div class="sidebar-user-row">
         <div class="sidebar-user-avatar" id="avatar-cycle" style="padding:0;overflow:hidden;cursor:pointer;border:2px solid var(--accent);transition:border-color 0.3s" title="点击换头像">
-          <img src="logo.png" style="width:100%;height:100%;object-fit:cover;border-radius:50%" />
+          <img src="img/logo.png" style="width:100%;height:100%;object-fit:cover;border-radius:50%" />
         </div>
         <span class="sidebar-user-name" id="sidebar-user-name">用户</span>
         <button class="edit-name-btn" id="edit-name-btn" title="修改名字">
@@ -366,8 +389,7 @@
 <div class="watermark" id="watermark">
   <a class="watermark-site" href="javascript:void(0);" onclick="window.electronAPI.openUrl('https://ibwhale.com/profile/3720008');" style="display:flex;align-items:center;gap:4px;background:rgba(16,163,127,0.1);border:1px solid rgba(16,163,127,0.3);border-radius:6px;padding:3px 10px;cursor:pointer;text-decoration:none;pointer-events:auto;z-index:1;position:relative;">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-    <span>作者主页: ibwhale.com</span>
-  </a>
+    <span>ibwhale.com</span>
   </a>
   <span class="watermark-copy" style="margin-top:4px;">ibwhale v1.3 · Copyright © 2026</span>
 </div>
@@ -1150,33 +1172,52 @@ let conversations = [];
 let activeConvId = null;
 let conversationBuffers = {}; // { convId: string } - save terminal output per conversation
 
+// Debounced auto-save: save buffer after PTY output stops arriving
+let saveBufferTimer = null;
+function debouncedSaveBuffer() {
+  if (saveBufferTimer) clearTimeout(saveBufferTimer);
+  saveBufferTimer = setTimeout(() => saveCurrentBuffer(), 500);
+}
+// Hook into PTY output to auto-save buffers
+if (window.electronAPI && window.electronAPI.onOutput) {
+  window.electronAPI.onOutput(() => debouncedSaveBuffer());
+}
+
 // Save current terminal buffer before switching
 function saveCurrentBuffer() {
   if (!terminal || !activeConvId) return;
   const buf = terminal.buffer.active;
-  let lines = '';
+  const lines = [];
   for (let i = 0; i < buf.length; i++) {
     const line = buf.getLine(i);
     if (line) {
-      lines += line.translateToString(true) + '\n';
+      // 使用较大的字符数限制以捕获完整行
+      lines.push(line.translateToString(true, 0, 10000));
     }
   }
-  conversationBuffers[activeConvId] = lines;
+  // 去除末尾空行
+  while (lines.length > 0 && lines[lines.length - 1].trim() === '') {
+    lines.pop();
+  }
+  conversationBuffers[activeConvId] = lines.join('\n');
 }
 
 // Load a conversation's buffer into terminal
 function loadConversationBuffer(convId) {
   if (!terminal) return;
   terminal.clear();
-  const buf = conversationBuffers[convId];
-  if (buf) {
-    const lines = buf.split('\n');
-    for (let i = 0; i < lines.length; i++) {
-      if (i > 0) terminal.writeln('');
-      const line = lines[i];
-      if (line) terminal.write(line);
-    }
+  const text = conversationBuffers[convId];
+  if (!text || text.trim() === '') {
+    terminal.writeln('');
+    terminal.writeln('  此对话尚无内容');
+    terminal.writeln('');
+    return;
   }
+  const lines = text.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    terminal.writeln(lines[i]);
+  }
+  terminal.writeln('');
 }
 
 // Render sidebar conversation list
@@ -1253,8 +1294,10 @@ async function newConversation() {
     const list = await window.electronAPI.getConvList();
     conversations = list;
     renderConversations();
-    // 刷新终端尺寸，修复内容显示
     terminal.clear();
+    terminal.writeln('');
+    terminal.writeln('  新对话已创建');
+    terminal.writeln('');
     window.fitAddon.fit();
     window.electronAPI.sendResize(terminal.cols, terminal.rows);
   }
@@ -1276,28 +1319,28 @@ async function switchConversation(convId) {
 }
 
 async function closeConversation(convId) {
+  saveCurrentBuffer();
+  await window.electronAPI.deleteConv(convId);
+  conversations = conversations.filter(c => c.id !== convId);
+  delete conversationBuffers[convId];
+
   if (convId === activeConvId) {
     const others = conversations.filter(c => c.id !== convId);
     if (others.length > 0) {
-      saveCurrentBuffer();
-      await window.electronAPI.deleteConv(convId);
-      conversations = conversations.filter(c => c.id !== convId);
+      // Switch to another conversation
       activeConvId = others[0].id;
       await window.electronAPI.switchConv(activeConvId);
       renderConversations();
       loadConversationBuffer(activeConvId);
     } else {
-      saveCurrentBuffer();
-      await window.electronAPI.deleteConv(convId);
-      conversations = conversations.filter(c => c.id !== convId);
-      await newConversation();
-      return;
+      // No conversations left — clear terminal and create a new default one
+      terminal.clear();
+      terminal.writeln('');
+      terminal.writeln('  此对话尚无内容');
+      terminal.writeln('');
+      renderConversations();
     }
   } else {
-    saveCurrentBuffer();
-    delete conversationBuffers[convId];
-    await window.electronAPI.deleteConv(convId);
-    conversations = conversations.filter(c => c.id !== convId);
     renderConversations();
   }
 }
@@ -1313,6 +1356,7 @@ if (window.electronAPI.onConvExit) {
 // New chat button (override renderer.ts handler after it runs)
 setTimeout(() => {
   document.getElementById('btn-new-chat').onclick = () => newConversation();
+  document.getElementById('btn-new-project').onclick = () => window.electronAPI.openNewWindow();
 }, 100);
 
 // Init conversations

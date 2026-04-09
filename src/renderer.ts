@@ -1,5 +1,5 @@
 /**
- * ibwhale Claude Code Desktop - Renderer
+ * 444 Claude Code Desktop - Renderer
  */
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
@@ -155,4 +155,4 @@ function setStatus(text: string, running: boolean) {
   el.style.color = running ? 'var(--accent)' : 'var(--error)';
 }
 
-console.log('[ibwhale] 渲染器已加载');
+console.log('[444] 渲染器已加载');

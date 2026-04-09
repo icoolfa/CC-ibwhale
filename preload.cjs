@@ -47,4 +47,5 @@ window.electronAPI = {
     ipcRenderer.on('update-progress', h);
     return () => ipcRenderer.removeListener('update-progress', h);
   },
+  openNewWindow: () => ipcRenderer.send('open-new-window'),
 };

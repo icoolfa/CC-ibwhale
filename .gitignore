@@ -11,6 +11,9 @@ ibwhale-user-config.json
 # Logs
 error.log
 
+# Claude Code
+.claude/
+
 # Windows
 *.lnk
 Thumbs.db

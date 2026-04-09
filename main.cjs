@@ -1,5 +1,5 @@
 /**
- * ibwhale Claude Code Desktop - Main Process
+ * 444 Claude Code Desktop - Main Process
  * 单实例锁 + 多PTY会话管理 + node-pty
  */
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
@@ -12,7 +12,7 @@ const os = require('os');
 const zlib = require('zlib');
 
 // ===== 本地配置持久化 =====
-const CONFIG_DIR = path.join(app.getPath('userData'), 'ibwhale');
+const CONFIG_DIR = path.join(app.getPath('userData'), '444');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 
 function loadLocalConfig() {
@@ -52,7 +52,7 @@ function saveLocalConfig(cfg) {
     if (!fs.existsSync(CONFIG_DIR)) fs.mkdirSync(CONFIG_DIR, { recursive: true });
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg), 'utf-8');
   } catch (err) {
-    console.error('[ibwhale] 保存配置失败:', err.message);
+    console.error('[444] 保存配置失败:', err.message);
   }
   // 同步写入 .env 文件
   if (cfg && cfg.apiKey && cfg.baseUrl) {
@@ -60,7 +60,7 @@ function saveLocalConfig(cfg) {
       const projectRoot = path.join(__dirname, '..');
       const envFile = path.join(projectRoot, '.env');
       const lines = [
-        '# ibwhale API 配置',
+        '# 444 API 配置',
         `MODEL_PROVIDER=${cfg.providerId || 'anthropic'}`,
         `ANTHROPIC_BASE_URL=${cfg.baseUrl}`,
         `ANTHROPIC_AUTH_TOKEN=${cfg.apiKey}`,
@@ -73,17 +73,32 @@ function saveLocalConfig(cfg) {
         'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1',
       ];
       fs.writeFileSync(envFile, lines.join('\n'), 'utf-8');
-      console.log('[ibwhale] .env 已更新');
+      console.log('[444] .env 已更新');
     } catch (err) {
-      console.error('[ibwhale] 写入 .env 失败:', err.message);
+      console.error('[444] 写入 .env 失败:', err.message);
     }
   }
 }
 
 let mainWindow = null;
-let activeConvId = null;
 
-// ===== 对话管理 =====
+// ===== 多窗口管理 =====
+// { BrowserWindow: { id: conversationId, activeConvId: string, convIds: Set<string> } }
+const windowMap = new Map();
+
+function getWindowForConvId(convId) {
+  for (const [win, info] of windowMap) {
+    if (info.id === convId) return win;
+  }
+  return null;
+}
+
+function getWindowInfo(event) {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const info = windowMap.get(win);
+  return { win, info };
+}
+
 // { id: string, title: string, ptyProcess: object }
 const conversations = new Map();
 
@@ -121,14 +136,18 @@ function spawnPtyForConversation(convId) {
     });
 
     ptyProcess.onData((data) => {
-      if (mainWindow && !mainWindow.isDestroyed() && convId === activeConvId) {
-        mainWindow.webContents.send('pty-output', data);
+      const targetWin = getWindowForConvId(convId);
+      // 只要窗口存在就发送输出，不再限制 activeConvId
+      // （所有对话共享一个 PTY，输出总是发往窗口）
+      if (targetWin && !targetWin.isDestroyed()) {
+        targetWin.webContents.send('pty-output', data);
       }
     });
 
     ptyProcess.onExit(() => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('conv-exit', convId);
+      const targetWin = getWindowForConvId(convId);
+      if (targetWin && !targetWin.isDestroyed()) {
+        targetWin.webContents.send('conv-exit', convId);
       }
       const conv = conversations.get(convId);
       if (conv) conv.ptyProcess = null;
@@ -140,10 +159,10 @@ function spawnPtyForConversation(convId) {
       conv.pid = ptyProcess.pid;
     }
 
-    console.log(`[ibwhale] Conv "${convId}" PID:`, ptyProcess.pid);
+    console.log(`[444] Conv "${convId}" PID:`, ptyProcess.pid);
     return true;
   } catch (err) {
-    console.error(`[ibwhale] Conv "${convId}" 启动失败:`, err.message);
+    console.error(`[444] Conv "${convId}" 启动失败:`, err.message);
     return false;
   }
 }
@@ -177,6 +196,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     frame: false,
+    icon: path.join(__dirname, 'img', 'logo.ico'),
     backgroundColor: '#1a1a2e',
     titleBarStyle: 'hidden',
     webPreferences: {
@@ -214,49 +234,118 @@ function createWindow() {
   });
 
   mainWindow.on('closed', () => {
-    killAllPtys();
+    const info = windowMap.get(mainWindow);
+    if (info) {
+      for (const convId of info.convIds) {
+        const conv = conversations.get(convId);
+        if (conv && conv.ptyProcess) {
+          try { conv.ptyProcess.kill(); } catch {}
+        }
+        conversations.delete(convId);
+      }
+    }
+    windowMap.delete(mainWindow);
     mainWindow = null;
   });
 }
 
+/**
+ * 打开一个新的终端窗口（独立 PTY 会话）
+ */
+function spawnNewWindow() {
+  const win = new BrowserWindow({
+    width: 1280,
+    height: 820,
+    minWidth: 900,
+    minHeight: 600,
+    frame: false,
+    icon: path.join(__dirname, 'img', 'logo.ico'),
+    backgroundColor: '#1a1a2e',
+    titleBarStyle: 'hidden',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: false,
+      nodeIntegration: true,
+    },
+    show: false,
+  });
+
+  win.loadFile(path.join(__dirname, 'index.html'));
+
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
+
+  // 新窗口独立 PTY
+  const id = 'conv-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+  conversations.set(id, { id, title: '新项目', ptyProcess: null, pid: null });
+  windowMap.set(win, { id, activeConvId: id, convIds: new Set([id]) });
+  spawnPtyForConversation(id);
+
+  win.once('ready-to-show', () => {
+    win.show();
+    win.focus();
+  });
+
+  win.on('closed', () => {
+    const info = windowMap.get(win);
+    if (info) {
+      for (const convId of info.convIds) {
+        const c = conversations.get(convId);
+        if (c && c.ptyProcess) {
+          try { c.ptyProcess.kill(); } catch {}
+        }
+        conversations.delete(convId);
+      }
+    }
+    windowMap.delete(win);
+  });
+}
+
 // ===== IPC: PTY =====
-ipcMain.on('pty-input', (_event, data) => {
-  const conv = conversations.get(activeConvId);
+ipcMain.on('pty-input', (event, data) => {
+  const { info } = getWindowInfo(event);
+  const conv = info ? conversations.get(info.activeConvId) : null;
   if (conv && conv.ptyProcess) conv.ptyProcess.write(data);
 });
 
-ipcMain.on('pty-resize', (_event, { cols, rows }) => {
-  const conv = conversations.get(activeConvId);
+ipcMain.on('pty-resize', (event, { cols, rows }) => {
+  const { info } = getWindowInfo(event);
+  const conv = info ? conversations.get(info.activeConvId) : null;
   if (conv && conv.ptyProcess) {
     try { conv.ptyProcess.resize(cols, rows); } catch {}
   }
 });
 
 // ===== IPC: 对话管理 =====
-ipcMain.handle('conv-new', () => {
+ipcMain.handle('conv-new', (event) => {
+  const { win, info } = getWindowInfo(event);
+  if (!win || !info) return { ok: false };
   const id = 'conv-' + Date.now().toString(36);
-  conversations.set(id, { id, title: '新对话', ptyProcess: null, pid: null });
-  activeConvId = id;
-  const ok = spawnPtyForConversation(id);
-  return { id, title: '新对话', pid: conversations.get(id)?.pid || null, ok };
+  // 新对话不绑定独立 PTY，复用窗口的原始 PTY（info.id 对应的那个）
+  const ownerConv = conversations.get(info.id);
+  conversations.set(id, {
+    id,
+    title: '新对话',
+    ptyProcess: ownerConv?.ptyProcess || null,
+    pid: ownerConv?.pid || null,
+  });
+  info.activeConvId = id;
+  info.convIds.add(id);
+  return { id, title: '新对话', pid: info.id, ok: true };
 });
 
-ipcMain.handle('conv-switch', (_event, convId) => {
-  if (!conversations.has(convId)) return { ok: false };
-  activeConvId = convId;
-  const conv = conversations.get(convId);
-  // If no PTY yet, spawn one
-  if (!conv.ptyProcess) {
-    spawnPtyForConversation(convId);
-  }
-  return { ok: true, pid: conv.pid || null };
+ipcMain.handle('conv-switch', (event, convId) => {
+  const { win, info } = getWindowInfo(event);
+  if (!win || !info || !conversations.has(convId)) return { ok: false };
+  info.activeConvId = convId;
+  return { ok: true };
 });
 
-ipcMain.handle('conv-delete', (_event, convId) => {
+ipcMain.handle('conv-delete', (event, convId) => {
   const conv = conversations.get(convId);
-  if (conv && conv.ptyProcess) {
-    try { conv.ptyProcess.kill(); } catch {}
-  }
+  // 不杀 PTY（共享终端），只删除对话条目
   conversations.delete(convId);
   return { ok: true };
 });
@@ -270,10 +359,14 @@ ipcMain.handle('conv-rename', (_event, { id, title }) => {
   return { ok: false };
 });
 
-ipcMain.handle('conv-list', () => {
+ipcMain.handle('conv-list', (event) => {
+  const { info } = getWindowInfo(event);
+  const activeId = info?.activeConvId;
+  const convIds = info?.convIds;
   const list = [];
   for (const [id, conv] of conversations) {
-    list.push({ id, title: conv.title, pid: conv.pid, active: id === activeConvId });
+    if (convIds && !convIds.has(id)) continue;
+    list.push({ id, title: conv.title, pid: conv.pid, active: id === activeId });
   }
   return list;
 });
@@ -294,15 +387,18 @@ ipcMain.on('conv-restart', (_event, convId) => {
 });
 
 // Set model env and restart active PTY
-ipcMain.on('set-model-env', (_event, cfg) => {
-  const conv = conversations.get(activeConvId);
+ipcMain.on('set-model-env', (event, cfg) => {
+  const { info } = getWindowInfo(event);
+  const targetConvId = info?.activeConvId;
+  if (!targetConvId) return;
+  const conv = conversations.get(targetConvId);
   if (conv && conv.ptyProcess) {
     try { conv.ptyProcess.kill(); } catch {}
     conv.ptyProcess = null;
     conv.pid = null;
   }
   setTimeout(() => {
-    if (conv && activeConvId) spawnPtyForConversation(activeConvId);
+    if (conv && targetConvId) spawnPtyForConversation(targetConvId);
   }, 500);
 });
 
@@ -312,7 +408,7 @@ ipcMain.handle('config-save', (_event, cfg) => saveLocalConfig(cfg));
 // ===== 检查更新 =====
 const { version: APP_VERSION } = require('./package.json');
 const GITHUB_API = 'api.github.com';
-const GITHUB_REPO = '/repos/icoolfa/CC-ibwhale/releases/latest';
+const GITHUB_REPO = '/repos/icoolfa/CC-444/releases/latest';
 
 ipcMain.handle('get-app-version', () => APP_VERSION);
 
@@ -332,11 +428,11 @@ ipcMain.handle('check-update', async () => {
       latest: latestTag,
       name: result.name || latestTag,
       body: result.body || '',
-      htmlUrl: result.html_url || 'https://github.com/icoolfa/CC-ibwhale/releases',
+      htmlUrl: result.html_url || 'https://github.com/icoolfa/CC-444/releases',
       assets: (result.assets || []).map(a => ({ name: a.name, url: a.browser_download_url, size: a.size })),
     };
   } catch (err) {
-    console.error('[ibwhale] 检查更新失败:', err.message);
+    console.error('[444] 检查更新失败:', err.message);
     return { ok: false, error: err.message };
   }
 });
@@ -358,7 +454,7 @@ function githubRequest(host, path) {
       hostname: host,
       port: 443,
       path,
-      headers: { 'User-Agent': 'ibwhale', 'Accept': 'application/vnd.github.v3+json' },
+      headers: { 'User-Agent': '444', 'Accept': 'application/vnd.github.v3+json' },
     };
     const req = https.request(options, (res) => {
       let data = '';
@@ -404,7 +500,7 @@ ipcMain.handle('auto-update', async () => {
     if (!zipAsset) return { ok: false, error: '未找到 ZIP 更新包' };
 
     // 3. 下载 ZIP 到临时目录
-    const tmpDir = path.join(os.tmpdir(), 'ibwhale-update-' + Date.now());
+    const tmpDir = path.join(os.tmpdir(), '444-update-' + Date.now());
     fs.mkdirSync(tmpDir, { recursive: true });
     const zipPath = path.join(tmpDir, 'update.zip');
 
@@ -412,16 +508,26 @@ ipcMain.handle('auto-update', async () => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('update-progress', { stage: 'downloading', progress: pct });
       }
+      // Also notify all other windows
+      for (const [win] of windowMap) {
+        if (win !== mainWindow && !win.isDestroyed()) {
+          win.webContents.send('update-progress', { stage: 'downloading', progress: pct });
+        }
+      }
     });
 
     // 4. 解压
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('update-progress', { stage: 'extracting', progress: 0 });
-    }
+    const notifyAll = (data) => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-progress', data);
+      for (const [win] of windowMap) {
+        if (win !== mainWindow && !win.isDestroyed()) win.webContents.send('update-progress', data);
+      }
+    };
+    notifyAll({ stage: 'extracting', progress: 0 });
     const extractDir = path.join(tmpDir, 'extracted');
     await extractZip(zipPath, extractDir);
 
-    // 5. 找到解压后的文件夹（通常是 CC-ibwhale-xxx/）
+    // 5. 找到解压后的文件夹（通常是 CC-444-xxx/）
     const updateDir = fs.readdirSync(extractDir).find(f => fs.statSync(path.join(extractDir, f)).isDirectory());
     if (!updateDir) return { ok: false, error: '解压后未找到更新目录' };
     const sourceDir = path.join(extractDir, updateDir);
@@ -434,9 +540,7 @@ ipcMain.handle('auto-update', async () => {
     cleanupTemp(tmpDir);
 
     // 8. 重启应用
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('update-progress', { stage: 'restarting', progress: 100 });
-    }
+    notifyAll({ stage: 'restarting', progress: 100 });
     // 延迟重启确保 UI 能显示完成状态
     setTimeout(() => {
       app.relaunch();
@@ -445,7 +549,7 @@ ipcMain.handle('auto-update', async () => {
 
     return { ok: true, version: latestTag };
   } catch (err) {
-    console.error('[ibwhale] 自动更新失败:', err.message, err.stack);
+    console.error('[444] 自动更新失败:', err.message, err.stack);
     return { ok: false, error: err.message };
   }
 });
@@ -453,9 +557,9 @@ ipcMain.handle('auto-update', async () => {
 function downloadFile(url, dest, onProgress) {
   return new Promise((resolve, reject) => {
     const transport = url.startsWith('https') ? https : http;
-    transport.get(url, { headers: { 'User-Agent': 'ibwhale' } }, (res) => {
+    transport.get(url, { headers: { 'User-Agent': '444' } }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        transport.get(res.headers.location, { headers: { 'User-Agent': 'ibwhale' } }, (res2) => {
+        transport.get(res.headers.location, { headers: { 'User-Agent': '444' } }, (res2) => {
           doDownload(res2, dest, onProgress).then(resolve).catch(reject);
         }).on('error', reject);
         return;
@@ -606,7 +710,7 @@ ipcMain.handle('translate', async (_event, text) => {
     }
     return result.choices?.[0]?.message?.content?.trim() || '翻译失败';
   } catch (err) {
-    console.error('[ibwhale] 翻译请求失败:', err.message);
+    console.error('[444] 翻译请求失败:', err.message);
     return '翻译失败: ' + err.message;
   }
 });
@@ -644,7 +748,7 @@ function httpRequest(urlStr, body, headers) {
       });
     });
     req.on('error', (e) => {
-      console.error('[ibwhale] 翻译请求错误:', e.code, e.message);
+      console.error('[444] 翻译请求错误:', e.code, e.message);
       reject(new Error(e.message));
     });
     req.on('timeout', () => {
@@ -657,14 +761,52 @@ function httpRequest(urlStr, body, headers) {
   });
 }
 
-ipcMain.on('window-minimize', () => mainWindow?.minimize());
-ipcMain.on('window-maximize', () => {
-  if (mainWindow?.isMaximized()) mainWindow.unmaximize();
-  else mainWindow?.maximize();
+// ===== IPC: PTY 控制 =====
+ipcMain.on('pty-kill', (event) => {
+  const { info } = getWindowInfo(event);
+  const conv = info ? conversations.get(info.activeConvId) : null;
+  if (conv && conv.ptyProcess) {
+    try { conv.ptyProcess.kill(); } catch {}
+    conv.ptyProcess = null;
+    conv.pid = null;
+  }
 });
-ipcMain.on('window-close', () => {
-  killAllPtys();
-  mainWindow?.close();
+
+ipcMain.on('pty-spawn', (event) => {
+  const { info } = getWindowInfo(event);
+  const conv = info ? conversations.get(info.activeConvId) : null;
+  if (conv && !conv.ptyProcess) {
+    spawnPtyForConversation(info.activeConvId);
+  }
+});
+
+ipcMain.on('open-new-window', () => {
+  spawnNewWindow();
+});
+
+ipcMain.on('window-minimize', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  win?.minimize();
+});
+ipcMain.on('window-maximize', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win?.isMaximized()) win.unmaximize();
+  else win?.maximize();
+});
+ipcMain.on('window-close', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const winInfo = windowMap.get(win);
+  if (winInfo) {
+    for (const convId of winInfo.convIds) {
+      const conv = conversations.get(convId);
+      if (conv && conv.ptyProcess) {
+        try { conv.ptyProcess.kill(); } catch {}
+      }
+      conversations.delete(convId);
+    }
+    windowMap.delete(win);
+  }
+  win?.close();
 });
 
 // ===== App 生命周期 =====
@@ -673,7 +815,7 @@ app.whenReady().then(() => {
   // Create initial conversation
   const id = 'conv-' + Date.now().toString(36);
   conversations.set(id, { id, title: '新对话', ptyProcess: null, pid: null });
-  activeConvId = id;
+  windowMap.set(mainWindow, { id, activeConvId: id, convIds: new Set([id]) });
   spawnPtyForConversation(id);
 });
 
