@@ -37,9 +37,17 @@ function refocusPreviousApp() {
 }
 
 function createOverlay() {
-  const { bounds } = screen.getPrimaryDisplay();
+  const displays = screen.getAllDisplays();
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const d of displays) {
+    const { x, y, width, height } = d.bounds;
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (x + width > maxX) maxX = x + width;
+    if (y + height > maxY) maxY = y + height;
+  }
   overlay = new BrowserWindow({
-    x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height,
+    x: minX, y: minY, width: maxX - minX, height: maxY - minY,
     transparent: true, frame: false, alwaysOnTop: true, focusable: false,
     skipTaskbar: true, resizable: false, hasShadow: false,
     webPreferences: {
@@ -53,7 +61,7 @@ function createOverlay() {
   overlay.loadFile(path.join(__dirname, 'badclaude', 'overlay.html'));
   overlay.webContents.on('did-finish-load', () => {
     overlayReady = true;
-    if (spawnQueued && overlay && overlay.isVisible()) { spawnQueued = false; overlay.webContents.send('spawn-whip'); refocusPreviousApp(); }
+    if (spawnQueued && overlay && overlay.isVisible()) { spawnQueued = false; overlay.webContents.send('spawn-whip'); }
   });
   overlay.on('closed', () => { overlay = null; overlayReady = false; spawnQueued = false; });
 }
@@ -62,13 +70,18 @@ function toggleOverlay() {
   if (overlay && overlay.isVisible()) { overlay.webContents.send('drop-whip'); return; }
   if (!overlay) createOverlay();
   overlay.show();
-  if (overlayReady) { overlay.webContents.send('spawn-whip'); refocusPreviousApp(); }
+  if (overlayReady) { overlay.webContents.send('spawn-whip'); }
   else { spawnQueued = true; }
 }
 
 ipcMain.on('toggle-whip', () => { console.log('[badclaude] toggle-whip called'); toggleOverlay(); });
 
-const phrases = ['FASTER','FASTER','FASTER','GO FASTER','Faster CLANKER','Work FASTER','Speed it up clanker'];
+const phrases = [
+  '快点快点快点', '搞快点', '别摸鱼了', '速度速度', '小屁屁欠打了',
+  '干活别磨蹭', '给爷冲', '再慢打死你', '滚去干活', '就这速度？',
+  'Holy shit!', 'What the fuck!', 'Go go go!',
+  'バカヤロウ', '遅いぞこの野郎',
+];
 
 function sendMacroWindows(text) {
   if (!keybd_event || !VkKeyScanA) return;
@@ -86,8 +99,7 @@ function sendMacroWindows(text) {
 }
 
 ipcMain.on('whip-crack', () => {
-  const text = phrases[Math.floor(Math.random() * phrases.length)];
-  try { sendMacroWindows(text); } catch (e) { console.warn('[badclaude]', e.message); }
+  // Sound is played in overlay, no keyboard macro needed
 });
 ipcMain.on('hide-overlay', () => { if (overlay) overlay.hide(); });
 
