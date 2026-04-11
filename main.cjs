@@ -81,8 +81,6 @@ function sendMacroWindows(text) {
     tapKey(vk);
     if (shiftState & 1) keybd_event(0x10, 0, KEYUP, 0);
   };
-  keybd_event(VK_CONTROL, 0, 0, 0); keybd_event(VK_C, 0, 0, 0);
-  keybd_event(VK_C, 0, KEYUP, 0); keybd_event(VK_CONTROL, 0, KEYUP, 0);
   for (const ch of text) tapChar(ch);
   keybd_event(VK_RETURN, 0, 0, 0); keybd_event(VK_RETURN, 0, KEYUP, 0);
 }
