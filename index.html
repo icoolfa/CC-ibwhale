@@ -1379,7 +1379,7 @@ window.onerror = (msg, src, line) => { errOverlay.style.display='block'; errText
 window.addEventListener('unhandledrejection', e => { errOverlay.style.display='block'; errText.textContent='Promise: '+(e.reason?.message||e.reason); });
 document.getElementById('err-copy').onclick = function() { navigator.clipboard.writeText(errText.textContent); this.textContent='已复制'; setTimeout(()=>this.textContent='复制',1500); };
 document.getElementById('err-close').onclick = () => errOverlay.style.display='none';
-document.getElementById('whip-btn').onclick = () => { alert('whip clicked'); window.electronAPI?.toggleWhip?.(); };
+document.getElementById('whip-btn').onclick = () => { window.electronAPI?.toggleWhip?.(); };
 </script>
 </body>
 </html>

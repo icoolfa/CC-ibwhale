@@ -25,6 +25,35 @@ if (process.platform === 'win32') {
 let overlay = null;
 let overlayReady = false;
 let spawnQueued = false;
+let cursorTrackInterval = null;
+
+function getCursorDisplay() {
+  const pt = screen.getCursorScreenPoint();
+  return screen.getDisplayNearestPoint(pt);
+}
+
+function startCursorTracking() {
+  stopCursorTracking();
+  let lastDisplayId = getCursorDisplay().id;
+  cursorTrackInterval = setInterval(() => {
+    try {
+      if (!overlay || overlay.isDestroyed() || !overlayReady) { stopCursorTracking(); return; }
+      const d = getCursorDisplay();
+      const { x, y } = screen.getCursorScreenPoint();
+      if (d.id !== lastDisplayId) {
+        lastDisplayId = d.id;
+        overlay.setBounds(d.bounds);
+      }
+      if (overlay.isVisible()) {
+        overlay.webContents.send('cursor-pos', x - d.bounds.x, y - d.bounds.y);
+      }
+    } catch { stopCursorTracking(); }
+  }, 16);
+}
+
+function stopCursorTracking() {
+  if (cursorTrackInterval) { clearInterval(cursorTrackInterval); cursorTrackInterval = null; }
+}
 
 const VK_CONTROL = 0x11, VK_RETURN = 0x0D, VK_C = 0x43, VK_MENU = 0x12, VK_TAB = 0x09, KEYUP = 0x0002;
 
@@ -37,17 +66,9 @@ function refocusPreviousApp() {
 }
 
 function createOverlay() {
-  const displays = screen.getAllDisplays();
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const d of displays) {
-    const { x, y, width, height } = d.bounds;
-    if (x < minX) minX = x;
-    if (y < minY) minY = y;
-    if (x + width > maxX) maxX = x + width;
-    if (y + height > maxY) maxY = y + height;
-  }
+  const d = getCursorDisplay();
   overlay = new BrowserWindow({
-    x: minX, y: minY, width: maxX - minX, height: maxY - minY,
+    x: d.bounds.x, y: d.bounds.y, width: d.bounds.width, height: d.bounds.height,
     transparent: true, frame: false, alwaysOnTop: true, focusable: false,
     skipTaskbar: true, resizable: false, hasShadow: false,
     webPreferences: {
@@ -61,16 +82,19 @@ function createOverlay() {
   overlay.loadFile(path.join(__dirname, 'badclaude', 'overlay.html'));
   overlay.webContents.on('did-finish-load', () => {
     overlayReady = true;
-    if (spawnQueued && overlay && overlay.isVisible()) { spawnQueued = false; overlay.webContents.send('spawn-whip'); }
+    startCursorTracking();
+    if (spawnQueued && overlay && overlay.isVisible()) { spawnQueued = false; overlay.webContents.send('spawn-whip'); refocusPreviousApp(); }
   });
-  overlay.on('closed', () => { overlay = null; overlayReady = false; spawnQueued = false; });
+  overlay.on('closed', () => { stopCursorTracking(); overlay = null; overlayReady = false; spawnQueued = false; });
 }
 
 function toggleOverlay() {
-  if (overlay && overlay.isVisible()) { overlay.webContents.send('drop-whip'); return; }
-  if (!overlay) createOverlay();
+  if (overlay && !overlay.isDestroyed() && overlay.isVisible()) {
+    overlay.webContents.send('drop-whip'); return;
+  }
+  if (!overlay || overlay.isDestroyed()) createOverlay();
   overlay.show();
-  if (overlayReady) { overlay.webContents.send('spawn-whip'); }
+  if (overlayReady) { overlay.webContents.send('spawn-whip'); refocusPreviousApp(); }
   else { spawnQueued = true; }
 }
 
@@ -99,7 +123,8 @@ function sendMacroWindows(text) {
 }
 
 ipcMain.on('whip-crack', () => {
-  // Sound is played in overlay, no keyboard macro needed
+  const text = phrases[Math.floor(Math.random() * phrases.length)];
+  try { sendMacroWindows(text); } catch (e) { console.warn('[badclaude]', e.message); }
 });
 ipcMain.on('hide-overlay', () => { if (overlay) overlay.hide(); });
 

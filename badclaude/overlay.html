@@ -90,6 +90,10 @@ let handleAngVel = 0;
 const WHIP_CRACK_SOUNDS = ['sounds/A.mp3', 'sounds/B.mp3', 'sounds/C.mp3', 'sounds/D.mp3', 'sounds/E.mp3'];
 
 document.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+// Main process sends cursor position for multi-display support
+if (window.bridge.onCursorPos) {
+  window.bridge.onCursorPos((x, y) => { mouseX = x; mouseY = y; });
+}
 document.addEventListener('mousedown', e => {
   if (e.button === 0 && whip && !dropping) triggerStrike();
 });
