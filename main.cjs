@@ -45,12 +45,12 @@ function createOverlay() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      preload: path.join(__dirname, 'node_modules', 'badclaude', 'preload.js'),
+      preload: path.join(__dirname, 'badclaude', 'preload.js'),
     },
   });
   overlay.setAlwaysOnTop(true, 'screen-saver');
   overlayReady = false;
-  overlay.loadFile(path.join(__dirname, 'node_modules', 'badclaude', 'overlay.html'));
+  overlay.loadFile(path.join(__dirname, 'badclaude', 'overlay.html'));
   overlay.webContents.on('did-finish-load', () => {
     overlayReady = true;
     if (spawnQueued && overlay && overlay.isVisible()) { spawnQueued = false; overlay.webContents.send('spawn-whip'); refocusPreviousApp(); }
