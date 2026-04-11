@@ -2,14 +2,96 @@
  * ibwhale Claude Code Desktop - Main Process
  * 单实例锁 + 多PTY会话管理 + node-pty
  */
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
 const http = require('http');
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
 const os = require('os');
 const zlib = require('zlib');
+
+// ===== Badclaude Overlay =====
+let keybd_event, VkKeyScanA;
+if (process.platform === 'win32') {
+  try {
+    const koffi = require('koffi');
+    const user32 = koffi.load('user32.dll');
+    keybd_event = user32.func('void __stdcall keybd_event(uint8_t bVk, uint8_t bScan, uint32_t dwFlags, uintptr_t dwExtraInfo)');
+    VkKeyScanA = user32.func('int16_t __stdcall VkKeyScanA(int ch)');
+  } catch (e) { console.warn('[badclaude] koffi unavailable:', e.message); }
+}
+
+let overlay = null;
+let overlayReady = false;
+let spawnQueued = false;
+
+const VK_CONTROL = 0x11, VK_RETURN = 0x0D, VK_C = 0x43, VK_MENU = 0x12, VK_TAB = 0x09, KEYUP = 0x0002;
+
+function refocusPreviousApp() {
+  if (process.platform !== 'win32' || !keybd_event) return;
+  setTimeout(() => {
+    keybd_event(VK_MENU, 0, 0, 0); keybd_event(VK_TAB, 0, 0, 0);
+    keybd_event(VK_TAB, 0, KEYUP, 0); keybd_event(VK_MENU, 0, KEYUP, 0);
+  }, 80);
+}
+
+function createOverlay() {
+  const { bounds } = screen.getPrimaryDisplay();
+  overlay = new BrowserWindow({
+    x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height,
+    transparent: true, frame: false, alwaysOnTop: true, focusable: false,
+    skipTaskbar: true, resizable: false, hasShadow: false,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      preload: path.join(__dirname, 'node_modules', 'badclaude', 'preload.js'),
+    },
+  });
+  overlay.setAlwaysOnTop(true, 'screen-saver');
+  overlayReady = false;
+  overlay.loadFile(path.join(__dirname, 'node_modules', 'badclaude', 'overlay.html'));
+  overlay.webContents.on('did-finish-load', () => {
+    overlayReady = true;
+    if (spawnQueued && overlay && overlay.isVisible()) { spawnQueued = false; overlay.webContents.send('spawn-whip'); refocusPreviousApp(); }
+  });
+  overlay.on('closed', () => { overlay = null; overlayReady = false; spawnQueued = false; });
+}
+
+function toggleOverlay() {
+  if (overlay && overlay.isVisible()) { overlay.webContents.send('drop-whip'); return; }
+  if (!overlay) createOverlay();
+  overlay.show();
+  if (overlayReady) { overlay.webContents.send('spawn-whip'); refocusPreviousApp(); }
+  else { spawnQueued = true; }
+}
+
+ipcMain.on('toggle-whip', () => { console.log('[badclaude] toggle-whip called'); toggleOverlay(); });
+
+const phrases = ['FASTER','FASTER','FASTER','GO FASTER','Faster CLANKER','Work FASTER','Speed it up clanker'];
+
+function sendMacroWindows(text) {
+  if (!keybd_event || !VkKeyScanA) return;
+  const tapKey = vk => { keybd_event(vk, 0, 0, 0); keybd_event(vk, 0, KEYUP, 0); };
+  const tapChar = ch => {
+    const packed = VkKeyScanA(ch.charCodeAt(0));
+    if (packed === -1) return;
+    const vk = packed & 0xff, shiftState = (packed >> 8) & 0xff;
+    if (shiftState & 1) keybd_event(0x10, 0, 0, 0);
+    tapKey(vk);
+    if (shiftState & 1) keybd_event(0x10, 0, KEYUP, 0);
+  };
+  keybd_event(VK_CONTROL, 0, 0, 0); keybd_event(VK_C, 0, 0, 0);
+  keybd_event(VK_C, 0, KEYUP, 0); keybd_event(VK_CONTROL, 0, KEYUP, 0);
+  for (const ch of text) tapChar(ch);
+  keybd_event(VK_RETURN, 0, 0, 0); keybd_event(VK_RETURN, 0, KEYUP, 0);
+}
+
+ipcMain.on('whip-crack', () => {
+  const text = phrases[Math.floor(Math.random() * phrases.length)];
+  try { sendMacroWindows(text); } catch (e) { console.warn('[badclaude]', e.message); }
+});
+ipcMain.on('hide-overlay', () => { if (overlay) overlay.hide(); });
 
 // ===== 本地配置持久化 =====
 const CONFIG_DIR = path.join(app.getPath('userData'), 'ibwhale');

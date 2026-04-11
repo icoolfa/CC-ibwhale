@@ -283,6 +283,8 @@
     .sidebar-user-name { font-size: 13px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .edit-name-btn { background: none; border: none; color: var(--text-sub); cursor: pointer; padding: 4px; border-radius: 6px; display: flex; align-items: center; transition: all 0.15s; flex-shrink: 0; }
     .edit-name-btn:hover { background: var(--bg-hover); color: var(--text); }
+    .whip-btn { display: block; margin: 4px auto; padding: 4px 16px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text-sub); font-size: 12px; cursor: pointer; }
+    .whip-btn:hover { background: var(--bg-hover); border-color: #e74c3c; color: #e74c3c; }
   </style>
 </head>
 <body>
@@ -364,6 +366,8 @@
     <div class="term-wrap">
       <div id="terminal"></div>
     </div>
+
+    <button class="whip-btn" id="whip-btn">挥鞭</button>
 
     <button class="tr-btn" id="tr-btn">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
@@ -1375,6 +1379,7 @@ window.onerror = (msg, src, line) => { errOverlay.style.display='block'; errText
 window.addEventListener('unhandledrejection', e => { errOverlay.style.display='block'; errText.textContent='Promise: '+(e.reason?.message||e.reason); });
 document.getElementById('err-copy').onclick = function() { navigator.clipboard.writeText(errText.textContent); this.textContent='已复制'; setTimeout(()=>this.textContent='复制',1500); };
 document.getElementById('err-close').onclick = () => errOverlay.style.display='none';
+document.getElementById('whip-btn').onclick = () => { alert('whip clicked'); window.electronAPI?.toggleWhip?.(); };
 </script>
 </body>
 </html>
