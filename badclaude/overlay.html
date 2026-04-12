@@ -88,6 +88,10 @@ let handleAngle = P.baseTargetAngle;
 let handleAngVel = 0;
 
 const WHIP_CRACK_SOUNDS = ['sounds/A.mp3', 'sounds/B.mp3', 'sounds/C.mp3', 'sounds/D.mp3', 'sounds/E.mp3'];
+const CRY_SOUNDS = ['../audio/GrilCrying_00008_.mp3', '../audio/GrilCrying_00016_.mp3', '../audio/GrilCrying_00017_.mp3',
+  '../audio/GrilCrying_00022_.mp3', '../audio/GrilCrying_00024_.mp3', '../audio/GrilCrying_00025_.mp3', '../audio/GrilCrying_00026_.mp3'];
+let strikeCount = 0;
+let nextCryAt = Math.floor(Math.random() * 3) + 2; // 2-4
 
 document.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
 // Main process sends cursor position for multi-display support
@@ -110,6 +114,8 @@ function spawnWhip(mx, my) {
   dropping = false;
   lastCrackTime = 0;
   whipSpawnTime = Date.now();
+  strikeCount = 0;
+  nextCryAt = Math.floor(Math.random() * 3) + 2;
   const pts = [];
   for (let i = 0; i < P.segments; i++) {
     const t = i / (P.segments - 1);
@@ -186,6 +192,14 @@ function triggerStrike() {
     lastCrackTime = now;
     playCrackSound();
     window.bridge.whipCrack();
+    // Play crying sound every 2-4 strikes
+    strikeCount++;
+    if (strikeCount >= nextCryAt) {
+      const src = CRY_SOUNDS[Math.floor(Math.random() * CRY_SOUNDS.length)];
+      new Audio(src).play().catch(() => {});
+      strikeCount = 0;
+      nextCryAt = Math.floor(Math.random() * 3) + 2;
+    }
   }
   // Verlet-style impulse: taper quadratically from handle (weak) to tip (strong)
   for (let i = 1; i < whip.length; i++) {
