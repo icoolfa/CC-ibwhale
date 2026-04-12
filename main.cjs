@@ -217,13 +217,18 @@ function getWindowInfo(event) {
 const conversations = new Map();
 
 function findGitBash() {
-  // 1. Try where git lookup
+  // 1. Try where git lookup – git.exe can be in mingw64\bin or cmd
   try {
     const gitPath = execSync('where git', { encoding: 'utf8' }).trim().split('\n')[0];
     if (gitPath) {
-      const base = path.dirname(path.dirname(gitPath));
+      // D:\Program Files\Git\mingw64\bin\git.exe  →  D:\Program Files\Git
+      // D:\Program Files\Git\cmd\git.exe           →  D:\Program Files\Git
+      const base = path.dirname(path.dirname(path.dirname(gitPath)));
       const bash = path.join(base, 'bin', 'bash.exe');
       if (fs.existsSync(bash)) return bash;
+      // fallback: check one level up
+      const bash2 = path.join(path.dirname(base), 'bin', 'bash.exe');
+      if (fs.existsSync(bash2)) return bash2;
     }
   } catch {}
 
@@ -232,6 +237,7 @@ function findGitBash() {
     path.join(process.env['ProgramFiles'] || 'C:\\Program Files', 'Git', 'bin', 'bash.exe'),
     path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Git', 'bin', 'bash.exe'),
     path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'Git', 'bin', 'bash.exe'),
+    'D:\\Program Files\\Git\\bin\\bash.exe',
   ];
   for (const p of candidates) {
     if (fs.existsSync(p)) return p;
