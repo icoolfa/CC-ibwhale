@@ -94,11 +94,11 @@ function toggleOverlay() {
   }
   if (!overlay || overlay.isDestroyed()) createOverlay();
   overlay.show();
-  if (overlayReady) { overlay.webContents.send('spawn-whip'); refocusPreviousApp(); }
+  if (overlayReady) { overlay.webContents.send('spawn-whip'); }
   else { spawnQueued = true; }
 }
 
-ipcMain.on('toggle-whip', () => { console.log('[badclaude] toggle-whip called'); toggleOverlay(); });
+ipcMain.on('toggle-whip', () => { toggleOverlay(); });
 
 const phrases = [
   '快点快点快点', '搞快点', '别摸鱼了', '速度速度', '小屁屁欠打了',
