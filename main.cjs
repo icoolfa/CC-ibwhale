@@ -7,7 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const https = require('https');
 const http = require('http');
-const { spawn, execFile } = require('child_process');
+const { spawn, execFile, execSync } = require('child_process');
 const os = require('os');
 const zlib = require('zlib');
 
@@ -219,14 +219,41 @@ function getWindowInfo(event) {
 // { id: string, title: string, ptyProcess: object }
 const conversations = new Map();
 
+function findGitBash() {
+  // 1. Try where git lookup
+  try {
+    const gitPath = execSync('where git', { encoding: 'utf8' }).trim().split('\n')[0];
+    if (gitPath) {
+      const base = path.dirname(path.dirname(gitPath));
+      const bash = path.join(base, 'bin', 'bash.exe');
+      if (fs.existsSync(bash)) return bash;
+    }
+  } catch {}
+
+  // 2. Common installation paths fallback
+  const candidates = [
+    path.join(process.env['ProgramFiles'] || 'C:\\Program Files', 'Git', 'bin', 'bash.exe'),
+    path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Git', 'bin', 'bash.exe'),
+    path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'Git', 'bin', 'bash.exe'),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
 function getShellEnv() {
-  return {
+  const gitBash = findGitBash();
+  const env = {
     ...process.env,
     TERM: 'xterm-256color',
     COLORTERM: 'truecolor',
     FORCE_COLOR: '3',
-    CLAUDE_CODE_GIT_BASH_PATH: 'D:\\Program Files\\Git\\bin\\bash.exe',
   };
+  if (gitBash) {
+    env.CLAUDE_CODE_GIT_BASH_PATH = gitBash;
+  }
+  return env;
 }
 
 function spawnPtyForConversation(convId) {

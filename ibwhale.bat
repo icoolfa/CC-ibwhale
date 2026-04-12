@@ -1,2 +1,3 @@
 @echo off
-start "" /D "D:\CC ibwhale\ibwhale" npx electron .
+cd /d "%~dp0"
+npx electron .
