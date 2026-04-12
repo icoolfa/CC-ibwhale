@@ -122,10 +122,7 @@ function sendMacroWindows(text) {
   keybd_event(VK_RETURN, 0, 0, 0); keybd_event(VK_RETURN, 0, KEYUP, 0);
 }
 
-ipcMain.on('whip-crack', () => {
-  const text = phrases[Math.floor(Math.random() * phrases.length)];
-  try { sendMacroWindows(text); } catch (e) { console.warn('[badclaude]', e.message); }
-});
+ipcMain.on('whip-crack', () => {});
 ipcMain.on('hide-overlay', () => { if (overlay) overlay.hide(); });
 
 // ===== 本地配置持久化 =====
@@ -266,8 +263,9 @@ function spawnPtyForConversation(convId) {
   const pty = require('node-pty');
   const projectRoot = path.join(__dirname, '..');
   const shell = process.platform === 'win32' ? 'cmd.exe' : 'bash';
-  const batFile = path.join(projectRoot, 'run.bat');
-  const args = process.platform === 'win32' ? ['/c', batFile] : [batFile];
+  const args = process.platform === 'win32'
+    ? ['/c', 'pushd ' + projectRoot + ' && node bin\\claude-code --dangerously-skip-permissions']
+    : [path.join(projectRoot, 'run.bat')];
 
   try {
     const ptyProcess = pty.spawn(shell, args, {
@@ -275,7 +273,6 @@ function spawnPtyForConversation(convId) {
       cols: 120,
       rows: 30,
       useConpty: false,
-      cwd: projectRoot,
       env: getShellEnv(),
     });
 
