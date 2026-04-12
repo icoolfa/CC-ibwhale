@@ -348,7 +348,7 @@ function createWindow() {
       contextIsolation: false,
       nodeIntegration: true,
     },
-    show: false,
+    show: true,
   });
 
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
@@ -411,7 +411,7 @@ function spawnNewWindow() {
       contextIsolation: false,
       nodeIntegration: true,
     },
-    show: false,
+    show: true,
   });
 
   win.loadFile(path.join(__dirname, 'index.html'));
