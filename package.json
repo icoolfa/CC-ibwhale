@@ -1,6 +1,6 @@
 {
   "name": "ibwhale",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "description": "ibwhale Claude Code Desktop - 基于 Electron + node-pty 的桌面端 AI 编程助手",
   "main": "main.cjs",
   "scripts": {
