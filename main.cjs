@@ -55,15 +55,7 @@ function stopCursorTracking() {
   if (cursorTrackInterval) { clearInterval(cursorTrackInterval); cursorTrackInterval = null; }
 }
 
-const VK_CONTROL = 0x11, VK_RETURN = 0x0D, VK_C = 0x43, VK_MENU = 0x12, VK_TAB = 0x09, KEYUP = 0x0002;
-
-function refocusPreviousApp() {
-  if (process.platform !== 'win32' || !keybd_event) return;
-  setTimeout(() => {
-    keybd_event(VK_MENU, 0, 0, 0); keybd_event(VK_TAB, 0, 0, 0);
-    keybd_event(VK_TAB, 0, KEYUP, 0); keybd_event(VK_MENU, 0, KEYUP, 0);
-  }, 80);
-}
+const VK_CONTROL = 0x11, VK_RETURN = 0x0D, VK_C = 0x43, KEYUP = 0x0002;
 
 function createOverlay() {
   const d = getCursorDisplay();
@@ -83,7 +75,7 @@ function createOverlay() {
   overlay.webContents.on('did-finish-load', () => {
     overlayReady = true;
     startCursorTracking();
-    if (spawnQueued && overlay && overlay.isVisible()) { spawnQueued = false; overlay.webContents.send('spawn-whip'); refocusPreviousApp(); }
+    if (spawnQueued && overlay && overlay.isVisible()) { spawnQueued = false; overlay.webContents.send('spawn-whip'); }
   });
   overlay.on('closed', () => { stopCursorTracking(); overlay = null; overlayReady = false; spawnQueued = false; });
 }
