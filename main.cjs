@@ -942,6 +942,10 @@ ipcMain.on('window-close', (event) => {
     }
     windowMap.delete(win);
   }
+  // Close overlay if it exists (invisible skipTaskbar window would prevent app quit)
+  if (overlay && !overlay.isDestroyed()) {
+    overlay.close();
+  }
   win?.close();
 });
 
