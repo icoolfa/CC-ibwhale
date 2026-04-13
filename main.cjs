@@ -55,6 +55,7 @@ function stopCursorTracking() {
   if (cursorTrackInterval) { clearInterval(cursorTrackInterval); cursorTrackInterval = null; }
 }
 
+// ===== IPC: toggle-whip
 const VK_CONTROL = 0x11, VK_RETURN = 0x0D, VK_C = 0x43, KEYUP = 0x0002;
 
 function createOverlay() {
