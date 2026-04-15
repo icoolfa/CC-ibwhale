@@ -120,35 +120,17 @@ ipcMain.on('hide-overlay', () => { if (overlay) overlay.hide(); });
 
 // ===== 本地配置持久化 =====
 const CONFIG_DIR = path.join(app.getPath('userData'), 'ibwhale');
-const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 
-function loadLocalConfig() {
+function getConfigFile(userName) {
+  const safe = (userName || 'default').replace(/[^a-zA-Z0-9_\u4e00-\u9fff]/g, '_');
+  return path.join(CONFIG_DIR, `config_${safe}.json`);
+}
+
+function loadLocalConfig(userName) {
   try {
-    if (fs.existsSync(CONFIG_FILE)) {
-      return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
-    }
-  } catch {}
-  // Fallback: parse .env file
-  try {
-    const projectRoot = path.join(__dirname, '..');
-    const envFile = path.join(projectRoot, '.env');
-    if (fs.existsSync(envFile)) {
-      const content = fs.readFileSync(envFile, 'utf-8');
-      const env = {};
-      for (const line of content.split('\n')) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith('#')) continue;
-        const eq = trimmed.indexOf('=');
-        if (eq > 0) env[trimmed.slice(0, eq).trim()] = trimmed.slice(eq + 1).trim();
-      }
-      const provider = env.MODEL_PROVIDER || 'anthropic';
-      return {
-        providerId: provider,
-        apiKey: env.ANTHROPIC_AUTH_TOKEN,
-        baseUrl: env.ANTHROPIC_BASE_URL,
-        selectedModelId: env.ANTHROPIC_MODEL,
-        customModel: env.ANTHROPIC_MODEL,
-      };
+    const file = getConfigFile(userName);
+    if (fs.existsSync(file)) {
+      return JSON.parse(fs.readFileSync(file, 'utf-8'));
     }
   } catch {}
   return null;
@@ -157,7 +139,8 @@ function loadLocalConfig() {
 function saveLocalConfig(cfg) {
   try {
     if (!fs.existsSync(CONFIG_DIR)) fs.mkdirSync(CONFIG_DIR, { recursive: true });
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg), 'utf-8');
+    const file = getConfigFile(cfg.userName);
+    fs.writeFileSync(file, JSON.stringify(cfg), 'utf-8');
   } catch (err) {
     console.error('[ibwhale] 保存配置失败:', err.message);
   }
@@ -538,8 +521,31 @@ ipcMain.on('set-model-env', (event, cfg) => {
   }, 500);
 });
 
-ipcMain.handle('config-load', () => loadLocalConfig());
+ipcMain.handle('config-load', (_event, userName) => loadLocalConfig(userName));
 ipcMain.handle('config-save', (_event, cfg) => saveLocalConfig(cfg));
+ipcMain.handle('config-rename', (_event, { oldName, newName }) => {
+  try {
+    const oldFile = getConfigFile(oldName);
+    const newFile = getConfigFile(newName);
+    if (fs.existsSync(oldFile)) {
+      const data = fs.readFileSync(oldFile, 'utf-8');
+      fs.writeFileSync(newFile, data, 'utf-8');
+      fs.unlinkSync(oldFile);
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+ipcMain.handle('config-delete', (_event, userName) => {
+  try {
+    const file = getConfigFile(userName);
+    if (fs.existsSync(file)) fs.unlinkSync(file);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
 
 // ===== 检查更新 =====
 const { version: APP_VERSION } = require('./package.json');

@@ -22,8 +22,10 @@ window.electronAPI = {
   minimize: () => ipcRenderer.send('window-minimize'),
   maximize: () => ipcRenderer.send('window-maximize'),
   close: () => ipcRenderer.send('window-close'),
-  loadConfig: () => ipcRenderer.invoke('config-load'),
+  loadConfig: (userName) => ipcRenderer.invoke('config-load', userName),
   saveConfig: (cfg) => ipcRenderer.invoke('config-save', cfg),
+  renameConfig: (oldName, newName) => ipcRenderer.invoke('config-rename', { oldName, newName }),
+  deleteConfig: (userName) => ipcRenderer.invoke('config-delete', userName),
   translate: (text) => ipcRenderer.invoke('translate', text),
   // Conversation management
   newConv: () => ipcRenderer.invoke('conv-new'),

@@ -308,6 +308,9 @@
           <img src="img/logo.png" style="width:100%;height:100%;object-fit:cover;border-radius:50%" />
         </div>
         <span class="sidebar-user-name" id="sidebar-user-name">用户</span>
+        <button class="edit-name-btn" id="reset-name-btn" title="重置用户名（模拟新用户）" style="display:none;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+        </button>
         <button class="edit-name-btn" id="edit-name-btn" title="修改名字">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
         </button>
@@ -569,10 +572,9 @@ const PROVIDERS = [
     {id:"claude-sonnet-4-5-20250514",label:"Claude Sonnet 4.5",date:"2025-05",rating:8.9,price:"3/15",desc:"上一代均衡 · 编程能力强"},
     {id:"claude-haiku-4-5-20251001",label:"Claude Haiku 4.5",date:"2025-10",rating:8.2,price:"0.8/4",desc:"极速响应 · 轻量任务"},
   ]},
-  { id:"deepseek", label:"DeepSeek", icon:"🐋", apiBaseUrl:"https://api.deepseek.com", models:[
-    {id:"deepseek-v4",label:"DeepSeek V4",date:"2026-03",rating:9.1,price:"0.3/0.5",desc:"最新旗舰 · 1M上下文 · 原生多模态"},
-    {id:"deepseek-v3",label:"DeepSeek V3",date:"2025-04",rating:8.8,price:"0.27/1.1",desc:"🆓 免费额度大 · 中文能力突出"},
-    {id:"deepseek-r1",label:"DeepSeek R1",date:"2025-01",rating:9.0,price:"0.55/2.2",desc:"深度推理 · 数学与代码"},
+  { id:"deepseek", label:"DeepSeek", icon:"🐋", apiBaseUrl:"https://api.deepseek.com/anthropic", models:[
+    {id:"deepseek-chat",label:"DeepSeek Chat",date:"2026-03",rating:9.1,price:"0.3/0.5",desc:"最新旗舰 · 非思考模式"},
+    {id:"deepseek-reasoner",label:"DeepSeek Reasoner",date:"2025-01",rating:9.0,price:"0.55/2.2",desc:"深度推理 · 思考模式"},
   ]},
   { id:"aliyun", label:"阿里云百炼", icon:"☁️", apiBaseUrl:"https://dashscope.aliyuncs.com/apps/anthropic", models:[
     {id:"qwen3.6-plus",label:"Qwen3.6-Plus",date:"2026-04",rating:9.0,price:"2/8",desc:"最新旗舰 · 编程Agent全面升级"},
@@ -586,7 +588,7 @@ const PROVIDERS = [
     {id:"qwen3-coder-flash",label:"Qwen3-Coder-Flash",date:"2025-09",rating:8.2,price:"0.5/2",desc:"快速补全 · 代码助手"},
     {id:"qwen-long",label:"Qwen-Long",date:"2024-02",rating:7.5,price:"0.5/2",desc:"超长上下文 · 百万Token"},
   ]},
-  { id:"zhipu", label:"智谱", icon:"🧠", apiBaseUrl:"https://open.bigmodel.cn", models:[
+  { id:"zhipu", label:"智谱", icon:"🧠", apiBaseUrl:"https://open.bigmodel.cn/api/anthropic", models:[
     {id:"glm-5.1",label:"GLM-5.1",date:"2026-03",rating:8.9,price:"2/8",desc:"最新旗舰 · 工程化编程"},
     {id:"glm-5",label:"GLM-5",date:"2026-02",rating:8.8,price:"3/12",desc:"Agentic Coding · 开源SOTA"},
     {id:"glm-5-turbo",label:"GLM-5-Turbo",date:"2026-03",rating:8.3,price:"0.5/2",desc:"快速推理 · 工具调用强化"},
@@ -595,7 +597,7 @@ const PROVIDERS = [
     {id:"glm-4.7-flash",label:"GLM-4.7-Flash",date:"2025-06",rating:7.8,price:"0",desc:"免费轻量版"},
     {id:"glm-4.6",label:"GLM-4.6",date:"2025-03",rating:8.0,price:"0.5/2",desc:"均衡通用 · 性价比高"},
   ]},
-  { id:"moonshot", label:"月之暗面", icon:"🌙", apiBaseUrl:"https://api.moonshot.cn", models:[
+  { id:"moonshot", label:"月之暗面", icon:"🌙", apiBaseUrl:"https://api.moonshot.cn/anthropic", models:[
     {id:"kimi-k2.5",label:"Kimi K2.5",date:"2026-01",rating:8.7,price:"0.6/2.5",desc:"最新旗舰 · 万亿参数MoE · 256K上下文"},
     {id:"kimi-k2-thinking",label:"Kimi K2 Thinking",date:"2026-01",rating:8.8,price:"0.6/2.5",desc:"深度推理 · 多步Agent · 思考模式"},
     {id:"kimi-k2",label:"Kimi K2",date:"2025-07",rating:8.4,price:"0.5/2",desc:"长文档分析 · 编程助手"},
@@ -636,8 +638,9 @@ let customModels = {}; // { providerId: [ {id, label} ] }
 
 // Load config from file
 async function loadConfigFromFile() {
+  const lsName = localStorage.getItem('ibwhale_user_name') || '';
   if (window.electronAPI && window.electronAPI.loadConfig) {
-    try { savedConfig = await window.electronAPI.loadConfig(); } catch {}
+    try { savedConfig = await window.electronAPI.loadConfig(lsName); } catch {}
   }
   if (savedConfig) {
     selectedProviderId = savedConfig.providerId || '';
@@ -675,9 +678,14 @@ async function persistConfig() {
 // ===== User Name =====
 function updateUserName() { document.getElementById('sidebar-user-name').textContent = userName || '用户'; }
 function saveName(name) {
+  const oldName = userName;
   userName = name.trim();
   if (userName) {
     localStorage.setItem('ibwhale_user_name', userName);
+    // 重命名配置文件
+    if (window.electronAPI && window.electronAPI.renameConfig && oldName) {
+      window.electronAPI.renameConfig(oldName, userName);
+    }
     persistConfig();
     updateUserName();
   }
@@ -687,6 +695,31 @@ function initUserName() {
   userName = localStorage.getItem('ibwhale_user_name') || '';
   updateUserName();
   document.getElementById('edit-name-btn').onclick = () => showNameOverlay();
+  document.getElementById('reset-name-btn').onclick = async () => {
+    const oldName = userName;
+    localStorage.removeItem('ibwhale_user_name');
+    userName = '';
+    apiKey = ''; localServiceUrl = ''; customApiUrl = '';
+    selectedProviderId = ''; selectedModelId = ''; customModel = '';
+    savedConfig = null;
+    // 删除旧用户的配置文件
+    if (oldName && window.electronAPI && window.electronAPI.deleteConfig) {
+      try { await window.electronAPI.deleteConfig(oldName); } catch {}
+    }
+    // 刷新 API 设置面板 UI
+    document.getElementById('api-key-input').value = '';
+    document.getElementById('api-custom-model').value = '';
+    document.getElementById('api-custom-url').value = '';
+    document.getElementById('api-local-url').value = '';
+    // 刷新 Provider Grid 标记
+    grid.querySelectorAll('.api-provider-item').forEach(el => {
+      el.classList.toggle('configured', false);
+      el.querySelector('.provider-badge')?.remove();
+    });
+    if (window.electronAPI) window.electronAPI.setModelEnv({ apiKey: '', baseUrl: '', model: '' });
+    updateUserName();
+    showNameOverlay();
+  };
   document.getElementById('name-save-btn').onclick = () => { const v = document.getElementById('name-input').value.trim(); if (v) { saveName(v); document.getElementById('name-overlay').classList.remove('open'); } };
   document.getElementById('name-input').onkeydown = (e) => { if (e.key === 'Enter') document.getElementById('name-save-btn').click(); };
   document.getElementById('name-overlay').onclick = (e) => { if (e.target.id === 'name-overlay' && userName) e.target.classList.remove('open'); };
