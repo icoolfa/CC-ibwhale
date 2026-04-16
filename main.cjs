@@ -150,14 +150,11 @@ function saveLocalConfig(cfg) {
       const projectRoot = path.join(__dirname, '..');
       const envFile = path.join(projectRoot, '.env');
       const lines = [
-        '# ibwhale API 配置',
         `MODEL_PROVIDER=${cfg.providerId || 'anthropic'}`,
         `ANTHROPIC_BASE_URL=${cfg.baseUrl}`,
         `ANTHROPIC_AUTH_TOKEN=${cfg.apiKey}`,
         `ANTHROPIC_MODEL=${cfg.customModel || cfg.selectedModelId || 'claude-sonnet-4-6'}`,
         ...(cfg.customApiUrl ? [`CUSTOM_API_URL=${cfg.customApiUrl}`] : []),
-        '',
-        '# 其他配置',
         'API_TIMEOUT_MS=3000000',
         'DISABLE_TELEMETRY=1',
         'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1',
@@ -789,21 +786,61 @@ function cleanupTemp(dir) {
 }
 
 // ===== 翻译 (主进程，无 CORS 限制) =====
-ipcMain.handle('translate', async (_event, text) => {
+
+function isLocalUrl(url) {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.toLowerCase();
+    return host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host.startsWith('192.168.') || host.startsWith('10.');
+  } catch { return false; }
+}
+
+function findActiveConfig() {
+  // Try default config first
   const cfg = loadLocalConfig();
-  if (!cfg?.apiKey || !cfg?.baseUrl || !cfg?.selectedModelId) {
-    return '请先配置 API';
-  }
+  if (cfg?.baseUrl) return cfg;
+  // Fallback: find any config with baseUrl set
+  try {
+    const files = fs.readdirSync(CONFIG_DIR).filter(f => f.startsWith('config_') && f.endsWith('.json'));
+    let best = null;
+    for (const f of files) {
+      const data = JSON.parse(fs.readFileSync(path.join(CONFIG_DIR, f), 'utf-8'));
+      if (data?.baseUrl && (!best || fs.statSync(path.join(CONFIG_DIR, f)).mtimeMs > best.mtime)) {
+        best = { ...data, mtime: fs.statSync(path.join(CONFIG_DIR, f)).mtimeMs };
+      }
+    }
+    return best;
+  } catch {}
+  return null;
+}
+
+ipcMain.handle('translate', async (_event, text) => {
+  const cfg = findActiveConfig();
   const trimmed = text.trim();
   if (!trimmed) return '';
+  if (!cfg?.baseUrl) {
+    return '请先配置 API';
+  }
+
+  // Determine model - support both customModel and selectedModelId
+  const model = cfg.customModel || cfg.selectedModelId;
+  if (!model) {
+    return '请先配置模型';
+  }
+
+  // For local API (localhost), apiKey is optional — just try the request
+  const local = isLocalUrl(cfg.baseUrl);
+  if (!local && !cfg.apiKey) {
+    return '请先配置 API Key';
+  }
+
   if (trimmed.length > 2000) {
     return trimmed.slice(0, 2000) + '...';
   }
 
   const provider = (cfg.providerId || 'anthropic').toLowerCase();
   const baseUrl = cfg.baseUrl.replace(/\/+$/, '');
-  const model = cfg.customModel || cfg.selectedModelId;
-  const isAnthropic = provider === 'claude' || provider === 'anthropic' || provider === 'aliyun' || baseUrl.includes('/anthropic');
+  const isAnthropic = provider === 'claude' || provider === 'anthropic' || baseUrl.includes('/anthropic');
 
   const systemPrompt = '请将以下文本翻译成中文，只返回翻译结果，不解释。';
 
@@ -830,13 +867,15 @@ ipcMain.handle('translate', async (_event, text) => {
     ? (baseUrl.endsWith('/v1') ? `${baseUrl}/messages` : `${baseUrl}/v1/messages`)
     : (baseUrl.endsWith('/v1') ? `${baseUrl}/chat/completions` : `${baseUrl}/v1/chat/completions`);
 
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(isAnthropic
+      ? { 'x-api-key': cfg.apiKey || 'ollama', 'anthropic-version': '2023-06-01' }
+      : cfg.apiKey ? { 'Authorization': `Bearer ${cfg.apiKey}` } : {}),
+  };
+
   try {
-    const result = await httpRequest(urlPath, body, {
-      'Content-Type': 'application/json',
-      ...(isAnthropic
-        ? { 'x-api-key': cfg.apiKey, 'anthropic-version': '2023-06-01' }
-        : { 'Authorization': `Bearer ${cfg.apiKey}` }),
-    });
+    const result = await httpRequest(urlPath, body, headers, local ? 120000 : 30000);
 
     if (isAnthropic) {
       if (Array.isArray(result.content)) {
@@ -857,7 +896,7 @@ ipcMain.handle('translate', async (_event, text) => {
   }
 });
 
-function httpRequest(urlStr, body, headers) {
+function httpRequest(urlStr, body, headers, timeoutMs) {
   return new Promise((resolve, reject) => {
     const url = new URL(urlStr);
     const transport = url.protocol === 'https:' ? https : http;
@@ -897,7 +936,7 @@ function httpRequest(urlStr, body, headers) {
       req.destroy();
       reject(new Error('请求超时'));
     });
-    req.setTimeout(30000);
+    req.setTimeout(timeoutMs || 30000);
     req.write(body, 'utf8');
     req.end();
   });

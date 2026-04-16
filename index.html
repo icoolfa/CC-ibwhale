@@ -557,25 +557,6 @@
 <script type="module">
 // ===== Providers (与 web/app.js 完全同步 =====
 const PROVIDERS = [
-  { id:"openai", label:"OpenAI", icon:"🔵", apiBaseUrl:"https://api.openai.com", models:[
-    {id:"gpt-5",label:"GPT-5",date:"2025-08",rating:9.2,price:"10/40",desc:"最新旗舰 · 推理与工具调用"},
-    {id:"gpt-5-mini",label:"GPT-5 Mini",date:"2025-08",rating:8.7,price:"1.5/6",desc:"轻量版GPT-5 · 高性价比"},
-    {id:"gpt-4.1",label:"GPT-4.1",date:"2025-04",rating:8.9,price:"7.5/30",desc:"长上下文专家 · 1M窗口"},
-    {id:"gpt-4o",label:"GPT-4o",date:"2024-11",rating:8.6,price:"2.5/10",desc:"多模态通用 · 视觉与文本"},
-    {id:"gpt-4o-mini",label:"GPT-4o Mini",date:"2024-07",rating:8.0,price:"0.15/0.6",desc:"免费额度高 · 日常对话"},
-    {id:"o3",label:"o3",date:"2025-03",rating:9.1,price:"10/40",desc:"深度推理 · 数学与代码"},
-    {id:"o3-mini",label:"o3-mini",date:"2025-01",rating:8.5,price:"1.1/4.4",desc:"轻量推理 · 性价比之选"},
-  ]},
-  { id:"claude", label:"Anthropic", icon:"🟠", apiBaseUrl:"https://api.anthropic.com", models:[
-    {id:"claude-opus-4-6",label:"Claude Opus 4.6",date:"2026-02",rating:9.4,price:"15/75",desc:"2026最新旗舰 · 复杂推理王者"},
-    {id:"claude-sonnet-4-6",label:"Claude Sonnet 4.6",date:"2026-02",rating:9.1,price:"3/15",desc:"推荐 · 性能价格最佳平衡"},
-    {id:"claude-sonnet-4-5-20250514",label:"Claude Sonnet 4.5",date:"2025-05",rating:8.9,price:"3/15",desc:"上一代均衡 · 编程能力强"},
-    {id:"claude-haiku-4-5-20251001",label:"Claude Haiku 4.5",date:"2025-10",rating:8.2,price:"0.8/4",desc:"极速响应 · 轻量任务"},
-  ]},
-  { id:"deepseek", label:"DeepSeek", icon:"🐋", apiBaseUrl:"https://api.deepseek.com/anthropic", models:[
-    {id:"deepseek-chat",label:"DeepSeek Chat",date:"2026-03",rating:9.1,price:"0.3/0.5",desc:"最新旗舰 · 非思考模式"},
-    {id:"deepseek-reasoner",label:"DeepSeek Reasoner",date:"2025-01",rating:9.0,price:"0.55/2.2",desc:"深度推理 · 思考模式"},
-  ]},
   { id:"aliyun", label:"阿里云百炼", icon:"☁️", apiBaseUrl:"https://dashscope.aliyuncs.com/apps/anthropic", models:[
     {id:"qwen3.6-plus",label:"Qwen3.6-Plus",date:"2026-04",rating:9.0,price:"2/8",desc:"最新旗舰 · 编程Agent全面升级"},
     {id:"qwen3.5-plus",label:"Qwen3.5-Plus",date:"2026-02",rating:8.8,price:"1.25/5",desc:"多模态理解 · 图文视频输入"},
@@ -587,6 +568,10 @@ const PROVIDERS = [
     {id:"qwen3-coder-plus",label:"Qwen3-Coder-Plus",date:"2025-09",rating:8.5,price:"2/8",desc:"代码生成 · 智能体编程"},
     {id:"qwen3-coder-flash",label:"Qwen3-Coder-Flash",date:"2025-09",rating:8.2,price:"0.5/2",desc:"快速补全 · 代码助手"},
     {id:"qwen-long",label:"Qwen-Long",date:"2024-02",rating:7.5,price:"0.5/2",desc:"超长上下文 · 百万Token"},
+  ]},
+  { id:"deepseek", label:"DeepSeek", icon:"🐋", apiBaseUrl:"https://api.deepseek.com/anthropic", models:[
+    {id:"deepseek-chat",label:"DeepSeek Chat",date:"2026-03",rating:9.1,price:"0.3/0.5",desc:"最新旗舰 · 非思考模式"},
+    {id:"deepseek-reasoner",label:"DeepSeek Reasoner",date:"2025-01",rating:9.0,price:"0.55/2.2",desc:"深度推理 · 思考模式"},
   ]},
   { id:"zhipu", label:"智谱", icon:"🧠", apiBaseUrl:"https://open.bigmodel.cn/api/anthropic", models:[
     {id:"glm-5.1",label:"GLM-5.1",date:"2026-03",rating:8.9,price:"2/8",desc:"最新旗舰 · 工程化编程"},
@@ -611,6 +596,16 @@ const PROVIDERS = [
     {id:"meta-llama/llama-3.3-70b-instruct",label:"Llama 3.3 70B",date:"2024-12",rating:8.5,price:"0.2/0.4",desc:"Meta · 开源最强"},
     {id:"qwen/qwen3-235b-a22b",label:"Qwen3 235B",date:"2025-05",rating:8.7,price:"0.2/0.6",desc:"阿里 · 中文优秀"},
   ]},
+  { id:"openai", label:"OpenAI", icon:"🔵", apiBaseUrl:"https://api.openai.com", models:[
+    {id:"gpt-5",label:"GPT-5",date:"2025-08",rating:9.2,price:"10/40",desc:"最新旗舰 · 推理与工具调用"},
+    {id:"gpt-5-mini",label:"GPT-5 Mini",date:"2025-08",rating:8.7,price:"1.5/6",desc:"轻量版GPT-5 · 高性价比"},
+    {id:"gpt-4.1",label:"GPT-4.1",date:"2025-04",rating:8.9,price:"7.5/30",desc:"长上下文专家 · 1M窗口"},
+    {id:"gpt-4o",label:"GPT-4o",date:"2024-11",rating:8.6,price:"2.5/10",desc:"多模态通用 · 视觉与文本"},
+    {id:"gpt-4o-mini",label:"GPT-4o Mini",date:"2024-07",rating:8.0,price:"0.15/0.6",desc:"免费额度高 · 日常对话"},
+    {id:"o3",label:"o3",date:"2025-03",rating:9.1,price:"10/40",desc:"深度推理 · 数学与代码"},
+    {id:"o3-mini",label:"o3-mini",date:"2025-01",rating:8.5,price:"1.1/4.4",desc:"轻量推理 · 性价比之选"},
+  ]},
+  { id:"custom", label:"自定义 API", icon:"⚙️", apiBaseUrl:"", models:[], isCustom: true },
   { id:"local", label:"本地模型", icon:"💻", apiBaseUrl:"http://localhost:11434", models:[
     {id:"llama3",label:"Llama 3",date:"2024-04",rating:8.0,price:"0",desc:"Meta开源 · 通用对话 · 离线"},
     {id:"qwen2.5",label:"Qwen 2.5",date:"2024-12",rating:7.7,price:"0",desc:"阿里开源 · 中文优秀 · 离线"},
@@ -668,7 +663,15 @@ async function persistConfig() {
   };
   // Derive baseUrl from current provider
   const p = PROVIDERS.find(x => x.id === selectedProviderId);
-  if (p) cfg.baseUrl = selectedProviderId === 'local' ? (localServiceUrl || p.apiBaseUrl) : p.apiBaseUrl;
+  if (p) {
+    if (p.isCustom) {
+      cfg.baseUrl = customApiUrl || '';
+    } else if (selectedProviderId === 'local') {
+      cfg.baseUrl = localServiceUrl || p.apiBaseUrl;
+    } else {
+      cfg.baseUrl = p.apiBaseUrl;
+    }
+  }
   if (window.electronAPI && window.electronAPI.saveConfig) {
     try { await window.electronAPI.saveConfig(cfg); } catch {}
   }
@@ -749,13 +752,18 @@ function selectProvider(id) {
   const localGroup = document.getElementById('local-service-group');
   localGroup.style.display = id === 'local' ? 'block' : 'none';
   if (id === 'local') renderLocalServices();
+  // For custom provider, always show custom URL field and models section hint
+  if (id === 'custom') {
+    document.getElementById('api-custom-url').value = customApiUrl || '';
+    document.getElementById('api-custom-model').value = customModel || '';
+  }
   // Restore key and custom model if switching to saved provider
   if (id === savedConfig?.providerId) {
     document.getElementById('api-key-input').value = apiKey;
     document.getElementById('api-custom-model').value = customModel;
     document.getElementById('api-local-url').value = localServiceUrl;
     document.getElementById('api-custom-url').value = customApiUrl || '';
-  } else {
+  } else if (id !== 'custom') {
     document.getElementById('api-key-input').value = '';
     document.getElementById('api-custom-model').value = '';
     if (id === 'local') document.getElementById('api-local-url').value = '';
@@ -846,13 +854,20 @@ document.getElementById('api-save').onclick = () => {
   if (!selectedProviderId) return showApiStatus('请选择服务商', true);
   if (!key) return showApiStatus('请输入 API Key', true);
   const p = PROVIDERS.find(x => x.id === selectedProviderId);
-  const modelId = customModelInput || selectedModelId || p?.models[0]?.id || '';
-  // Custom URL overrides default; local provider uses localUrl or customUrl
+  // Custom provider requires URL and model name
+  if (p?.isCustom) {
+    if (!customUrl) return showApiStatus('请输入 API 地址', true);
+    if (!customModelInput) return showApiStatus('请输入模型 ID', true);
+  }
+  let modelId = customModelInput || selectedModelId || p?.models[0]?.id || '';
+  // Custom URL overrides default; local provider uses localUrl or customUrl; custom provider uses customUrl
   let baseUrl;
   if (customUrl) {
     baseUrl = customUrl;
   } else if (selectedProviderId === 'local') {
     baseUrl = localUrl || p?.apiBaseUrl;
+  } else if (p?.isCustom) {
+    baseUrl = customUrl;
   } else {
     baseUrl = p?.apiBaseUrl;
   }
@@ -947,7 +962,7 @@ function updateModelDropdown(provider) {
     const el = document.createElement('div');
     el.className = 'model-option' + (m.id === selectedModelId ? ' active' : '');
     el.innerHTML = `<div class="model-main-row"><span class="model-name">${m.label}</span><span class="model-date">${m.date}</span><span class="model-rating">⭐ ${m.rating}</span><span class="model-price">$${m.price}/M</span>${m.id===selectedModelId?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10a37f" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>':''}</div><div class="model-desc-row">${m.desc}</div>`;
-    el.onclick = () => {
+      el.onclick = () => {
       selectedModelId = m.id;
       document.getElementById('model-label').textContent = m.label;
       dd.querySelectorAll('.model-option').forEach(o => o.classList.remove('active'));
@@ -955,9 +970,10 @@ function updateModelDropdown(provider) {
       dd.classList.remove('open');
       document.getElementById('model-chevron').style.transform = '';
       // Switch model via env
-      const p = PROVIDERS.find(x => x.id === savedConfig?.providerId);
-      if (p && savedConfig?.apiKey) {
-        applyModelEnv(savedConfig.apiKey, p.apiBaseUrl, m.id);
+      const sp = PROVIDERS.find(x => x.id === savedConfig?.providerId);
+      if (sp && savedConfig?.apiKey) {
+        const base = sp.isCustom ? (customApiUrl || sp.apiBaseUrl) : sp.apiBaseUrl;
+        applyModelEnv(savedConfig.apiKey, base, m.id);
       }
     };
     dd.appendChild(el);
@@ -975,9 +991,10 @@ function updateModelDropdown(provider) {
       el.classList.add('active');
       dd.classList.remove('open');
       document.getElementById('model-chevron').style.transform = '';
-      const p = PROVIDERS.find(x => x.id === savedConfig?.providerId);
-      if (p && savedConfig?.apiKey) {
-        applyModelEnv(savedConfig.apiKey, p.apiBaseUrl, cm.id);
+      const sp = PROVIDERS.find(x => x.id === savedConfig?.providerId);
+      if (sp && savedConfig?.apiKey) {
+        const base = sp.isCustom ? (customApiUrl || sp.apiBaseUrl) : sp.apiBaseUrl;
+        applyModelEnv(savedConfig.apiKey, base, cm.id);
       }
     };
     dd.appendChild(el);
@@ -998,7 +1015,11 @@ document.addEventListener('click', () => {
 function updateSidebarUser(p, modelId, customModelName) {
   const dot = document.getElementById('sidebar-api-dot');
   if (p) {
-    document.getElementById('model-label').textContent = customModelName || (p.models.find(x => x.id === modelId)?.label) || p.label;
+    if (p.isCustom) {
+      document.getElementById('model-label').textContent = customModelName || modelId || '自定义模型';
+    } else {
+      document.getElementById('model-label').textContent = customModelName || (p.models.find(x => x.id === modelId)?.label) || p.label;
+    }
     dot.style.display = 'block';
     dot.style.background = '#10a37f';
     dot.style.boxShadow = '0 0 6px rgba(16,163,127,0.5)';
@@ -1021,8 +1042,9 @@ function applyModelEnv(apiKey, baseUrl, model) {
   if (savedConfig) {
     const p = PROVIDERS.find(x => x.id === savedConfig.providerId);
     if (p) {
-      const m = p.models.find(x => x.id === savedConfig.selectedModelId);
-      const label = savedConfig.customModel || (m ? m.label : p.label);
+      const label = p.isCustom
+        ? (savedConfig.customModel || '自定义模型')
+        : (p.models.find(x => x.id === savedConfig.selectedModelId)?.label || savedConfig.customModel || p.label);
       document.getElementById('model-label').textContent = label;
       updateSidebarUser(p, savedConfig.selectedModelId, savedConfig.customModel);
       updateModelDropdown(p);
