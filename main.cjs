@@ -222,6 +222,25 @@ function getShellEnv() {
     COLORTERM: 'truecolor',
     FORCE_COLOR: '3',
   };
+  // 加载 .env 文件到环境变量
+  const projectRoot = path.join(__dirname, '..');
+  const envFile = path.join(projectRoot, '.env');
+  if (fs.existsSync(envFile)) {
+    try {
+      const content = fs.readFileSync(envFile, 'utf-8');
+      for (const line of content.split('\n')) {
+        const trimmed = line.trim();
+        if (trimmed && !trimmed.startsWith('#')) {
+          const eq = trimmed.indexOf('=');
+          if (eq > 0) {
+            const key = trimmed.substring(0, eq).trim();
+            const val = trimmed.substring(eq + 1).trim();
+            env[key] = val;
+          }
+        }
+      }
+    } catch {}
+  }
   if (gitBash) {
     env.CLAUDE_CODE_GIT_BASH_PATH = gitBash;
   }
@@ -507,6 +526,20 @@ ipcMain.on('set-model-env', (event, cfg) => {
   const { info } = getWindowInfo(event);
   const targetConvId = info?.activeConvId;
   if (!targetConvId) return;
+  // 先保存配置（更新 .env 文件）
+  if (cfg) {
+    // setModelEnv 传入的是 { apiKey, baseUrl, model }，需要映射为 saveLocalConfig 的格式
+    const saveCfg = {
+      providerId: cfg.providerId || 'custom',
+      baseUrl: cfg.baseUrl,
+      apiKey: cfg.apiKey,
+      customModel: cfg.model || cfg.customModel || '',
+      selectedModelId: cfg.selectedModelId || '',
+      userName: cfg.userName || info?.userName || 'default',
+      customApiUrl: cfg.customApiUrl || '',
+    };
+    saveLocalConfig(saveCfg);
+  }
   const conv = conversations.get(targetConvId);
   if (conv && conv.ptyProcess) {
     try { conv.ptyProcess.kill(); } catch {}

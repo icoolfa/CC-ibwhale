@@ -448,12 +448,6 @@
         <li><b>选择模型</b> — 点击顶部模型选择器，切换已配置的大模型</li>
         <li><b>自定义模型</b> — 在 API 配置中输入任意模型 ID</li>
       </ul>
-      <h3>⚙️ API 配置</h3>
-      <ul class="help-list">
-        <li><b>打开设置</b> — 点击左下角钥匙图标</li>
-        <li><b>服务商</b> — 支持 OpenAI / Claude / DeepSeek / 阿里云 / 智谱 / 月之暗面 / OpenRouter / 本地模型</li>
-        <li><b>数据保存</b> — 所有配置存储在本地文件（非浏览器 localStorage），重装不丢失</li>
-      </ul>
       <div class="help-disclaimer">
         <p><b>免责声明：</b> 本软件仅供个人学习与研究使用，基于 ibwhale 框架开发，与 Anthropic 官方 Claude Code 无直接关联。用户使用本软件进行的一切行为及产生的后果由用户自行承担。请遵守各模型服务商的使用条款及相关法律法规。</p>
       </div>
@@ -558,59 +552,50 @@
 // ===== Providers (与 web/app.js 完全同步 =====
 const PROVIDERS = [
   { id:"aliyun", label:"阿里云百炼", icon:"☁️", apiBaseUrl:"https://dashscope.aliyuncs.com/apps/anthropic", models:[
-    {id:"qwen3.6-plus",label:"Qwen3.6-Plus",date:"2026-04",rating:9.0,price:"2/8",desc:"最新旗舰 · 编程Agent全面升级"},
-    {id:"qwen3.5-plus",label:"Qwen3.5-Plus",date:"2026-02",rating:8.8,price:"1.25/5",desc:"多模态理解 · 图文视频输入"},
-    {id:"qwen3.5-flash",label:"Qwen3.5-Flash",date:"2026-02",rating:8.3,price:"0.25/1",desc:"极速响应 · 高性价比"},
-    {id:"qwen3-max",label:"Qwen3-Max",date:"2025-09",rating:8.7,price:"2/8",desc:"旗舰推理 · 万亿参数"},
-    {id:"qwen3-max-thinking",label:"Qwen3-Max-Thinking",date:"2026-01",rating:8.9,price:"2/8",desc:"深度思考 · 超长推理链"},
-    {id:"qwen3-plus",label:"Qwen3-Plus",date:"2025-05",rating:8.5,price:"0.5/1.5",desc:"均衡模型 · 性价比之选"},
-    {id:"qwen3-flash",label:"Qwen3-Flash",date:"2025-05",rating:8.1,price:"0.1/0.4",desc:"快速轻量 · 日常对话"},
-    {id:"qwen3-coder-plus",label:"Qwen3-Coder-Plus",date:"2025-09",rating:8.5,price:"2/8",desc:"代码生成 · 智能体编程"},
-    {id:"qwen3-coder-flash",label:"Qwen3-Coder-Flash",date:"2025-09",rating:8.2,price:"0.5/2",desc:"快速补全 · 代码助手"},
-    {id:"qwen-long",label:"Qwen-Long",date:"2024-02",rating:7.5,price:"0.5/2",desc:"超长上下文 · 百万Token"},
+    {id:"qwen3.6-plus",label:"Qwen3.6-Plus",date:"2026-04",rating:9.0,price:"2/8"},
+    {id:"qwen3.5-plus",label:"Qwen3.5-Plus",date:"2026-02",rating:8.8,price:"1.25/5"},
+    {id:"qwen3.5-flash",label:"Qwen3.5-Flash",date:"2026-02",rating:8.3,price:"0.25/1"},
+    {id:"qwen3-max",label:"Qwen3-Max",date:"2025-09",rating:8.7,price:"2/8"},
+    {id:"qwen3-max-thinking",label:"Qwen3-Max-Thinking",date:"2026-01",rating:8.9,price:"2/8"},
+    {id:"qwen3-plus",label:"Qwen3-Plus",date:"2025-05",rating:8.5,price:"0.5/1.5"},
+    {id:"qwen3-flash",label:"Qwen3-Flash",date:"2025-05",rating:8.1,price:"0.1/0.4"},
+    {id:"qwen3-coder-plus",label:"Qwen3-Coder-Plus",date:"2025-09",rating:8.5,price:"2/8"},
+    {id:"qwen3-coder-flash",label:"Qwen3-Coder-Flash",date:"2025-09",rating:8.2,price:"0.5/2"},
+    {id:"qwen-long",label:"Qwen-Long",date:"2024-02",rating:7.5,price:"0.5/2"},
   ]},
   { id:"deepseek", label:"DeepSeek", icon:"🐋", apiBaseUrl:"https://api.deepseek.com/anthropic", models:[
-    {id:"deepseek-chat",label:"DeepSeek Chat",date:"2026-03",rating:9.1,price:"0.3/0.5",desc:"最新旗舰 · 非思考模式"},
-    {id:"deepseek-reasoner",label:"DeepSeek Reasoner",date:"2025-01",rating:9.0,price:"0.55/2.2",desc:"深度推理 · 思考模式"},
+    {id:"deepseek-chat",label:"DeepSeek Chat",date:"2026-03",rating:9.1,price:"0.3/0.5"},
+    {id:"deepseek-reasoner",label:"DeepSeek Reasoner",date:"2025-01",rating:9.0,price:"0.55/2.2"},
   ]},
   { id:"zhipu", label:"智谱", icon:"🧠", apiBaseUrl:"https://open.bigmodel.cn/api/anthropic", models:[
-    {id:"glm-5.1",label:"GLM-5.1",date:"2026-03",rating:8.9,price:"2/8",desc:"最新旗舰 · 工程化编程"},
-    {id:"glm-5",label:"GLM-5",date:"2026-02",rating:8.8,price:"3/12",desc:"Agentic Coding · 开源SOTA"},
-    {id:"glm-5-turbo",label:"GLM-5-Turbo",date:"2026-03",rating:8.3,price:"0.5/2",desc:"快速推理 · 工具调用强化"},
-    {id:"glm-5v-turbo",label:"GLM-5V-Turbo",date:"2026-03",rating:8.4,price:"1/4",desc:"视觉+编程 · 多模态"},
-    {id:"glm-4.7",label:"GLM-4.7",date:"2025-06",rating:8.2,price:"1/4",desc:"上一代稳定版"},
-    {id:"glm-4.7-flash",label:"GLM-4.7-Flash",date:"2025-06",rating:7.8,price:"0",desc:"免费轻量版"},
-    {id:"glm-4.6",label:"GLM-4.6",date:"2025-03",rating:8.0,price:"0.5/2",desc:"均衡通用 · 性价比高"},
+    {id:"glm-5.1",label:"GLM-5.1",date:"2026-03",rating:8.9,price:"2/8"},
+    {id:"glm-5",label:"GLM-5",date:"2026-02",rating:8.8,price:"3/12"},
+    {id:"glm-5-turbo",label:"GLM-5-Turbo",date:"2026-03",rating:8.3,price:"0.5/2"},
+    {id:"glm-5v-turbo",label:"GLM-5V-Turbo",date:"2026-03",rating:8.4,price:"1/4"},
+    {id:"glm-4.7",label:"GLM-4.7",date:"2025-06",rating:8.2,price:"1/4"},
+    {id:"glm-4.7-flash",label:"GLM-4.7-Flash",date:"2025-06",rating:7.8,price:"0"},
+    {id:"glm-4.6",label:"GLM-4.6",date:"2025-03",rating:8.0,price:"0.5/2"},
   ]},
   { id:"moonshot", label:"月之暗面", icon:"🌙", apiBaseUrl:"https://api.moonshot.cn/anthropic", models:[
-    {id:"kimi-k2.5",label:"Kimi K2.5",date:"2026-01",rating:8.7,price:"0.6/2.5",desc:"最新旗舰 · 万亿参数MoE · 256K上下文"},
-    {id:"kimi-k2-thinking",label:"Kimi K2 Thinking",date:"2026-01",rating:8.8,price:"0.6/2.5",desc:"深度推理 · 多步Agent · 思考模式"},
-    {id:"kimi-k2",label:"Kimi K2",date:"2025-07",rating:8.4,price:"0.5/2",desc:"长文档分析 · 编程助手"},
+    {id:"kimi-k2.5",label:"Kimi K2.5",date:"2026-01",rating:8.7,price:"0.6/2.5"},
+    {id:"kimi-k2-thinking",label:"Kimi K2 Thinking",date:"2026-01",rating:8.8,price:"0.6/2.5"},
+    {id:"kimi-k2",label:"Kimi K2",date:"2025-07",rating:8.4,price:"0.5/2"},
   ]},
   { id:"openrouter", label:"OpenRouter", icon:"🔗", apiBaseUrl:"https://openrouter.ai/api/v1", models:[
-    {id:"anthropic/claude-sonnet-4-6",label:"Claude Sonnet 4.6",date:"2026-02",rating:9.1,price:"3/15",desc:"Anthropic · 最佳平衡"},
-    {id:"anthropic/claude-opus-4-6",label:"Claude Opus 4.6",date:"2026-02",rating:9.4,price:"15/75",desc:"Anthropic · 旗舰推理"},
-    {id:"openai/gpt-5",label:"GPT-5",date:"2025-08",rating:9.2,price:"10/40",desc:"OpenAI · 最新旗舰"},
-    {id:"google/gemini-2.5-pro",label:"Gemini 2.5 Pro",date:"2025-05",rating:9.0,price:"2.5/10",desc:"Google · 多模态强大"},
-    {id:"deepseek/deepseek-v3",label:"DeepSeek V3",date:"2025-04",rating:8.8,price:"0.14/0.28",desc:"DeepSeek · 性价比极高"},
-    {id:"meta-llama/llama-3.3-70b-instruct",label:"Llama 3.3 70B",date:"2024-12",rating:8.5,price:"0.2/0.4",desc:"Meta · 开源最强"},
-    {id:"qwen/qwen3-235b-a22b",label:"Qwen3 235B",date:"2025-05",rating:8.7,price:"0.2/0.6",desc:"阿里 · 中文优秀"},
-  ]},
-  { id:"openai", label:"OpenAI", icon:"🔵", apiBaseUrl:"https://api.openai.com", models:[
-    {id:"gpt-5",label:"GPT-5",date:"2025-08",rating:9.2,price:"10/40",desc:"最新旗舰 · 推理与工具调用"},
-    {id:"gpt-5-mini",label:"GPT-5 Mini",date:"2025-08",rating:8.7,price:"1.5/6",desc:"轻量版GPT-5 · 高性价比"},
-    {id:"gpt-4.1",label:"GPT-4.1",date:"2025-04",rating:8.9,price:"7.5/30",desc:"长上下文专家 · 1M窗口"},
-    {id:"gpt-4o",label:"GPT-4o",date:"2024-11",rating:8.6,price:"2.5/10",desc:"多模态通用 · 视觉与文本"},
-    {id:"gpt-4o-mini",label:"GPT-4o Mini",date:"2024-07",rating:8.0,price:"0.15/0.6",desc:"免费额度高 · 日常对话"},
-    {id:"o3",label:"o3",date:"2025-03",rating:9.1,price:"10/40",desc:"深度推理 · 数学与代码"},
-    {id:"o3-mini",label:"o3-mini",date:"2025-01",rating:8.5,price:"1.1/4.4",desc:"轻量推理 · 性价比之选"},
+    {id:"anthropic/claude-sonnet-4-6",label:"Claude Sonnet 4.6",date:"2026-02",rating:9.1,price:"3/15"},
+    {id:"anthropic/claude-opus-4-6",label:"Claude Opus 4.6",date:"2026-02",rating:9.4,price:"15/75"},
+    {id:"openai/gpt-5",label:"GPT-5",date:"2025-08",rating:9.2,price:"10/40"},
+    {id:"google/gemini-2.5-pro",label:"Gemini 2.5 Pro",date:"2025-05",rating:9.0,price:"2.5/10"},
+    {id:"deepseek/deepseek-v3",label:"DeepSeek V3",date:"2025-04",rating:8.8,price:"0.14/0.28"},
+    {id:"meta-llama/llama-3.3-70b-instruct",label:"Llama 3.3 70B",date:"2024-12",rating:8.5,price:"0.2/0.4"},
+    {id:"qwen/qwen3-235b-a22b",label:"Qwen3 235B",date:"2025-05",rating:8.7,price:"0.2/0.6"},
   ]},
   { id:"custom", label:"自定义 API", icon:"⚙️", apiBaseUrl:"", models:[], isCustom: true },
   { id:"local", label:"本地模型", icon:"💻", apiBaseUrl:"http://localhost:11434", models:[
-    {id:"llama3",label:"Llama 3",date:"2024-04",rating:8.0,price:"0",desc:"Meta开源 · 通用对话 · 离线"},
-    {id:"qwen2.5",label:"Qwen 2.5",date:"2024-12",rating:7.7,price:"0",desc:"阿里开源 · 中文优秀 · 离线"},
-    {id:"deepseek-r1",label:"DeepSeek R1",date:"2025-01",rating:9.0,price:"0",desc:"深度推理 · 离线可用"},
-    {id:"mistral",label:"Mistral",date:"2024-10",rating:7.5,price:"0",desc:"Mistral AI · 轻量高效 · 离线"},
+    {id:"llama3",label:"Llama 3",date:"2024-04",rating:8.0,price:"0"},
+    {id:"qwen2.5",label:"Qwen 2.5",date:"2024-12",rating:7.7,price:"0"},
+    {id:"deepseek-r1",label:"DeepSeek R1",date:"2025-01",rating:9.0,price:"0"},
+    {id:"mistral",label:"Mistral",date:"2024-10",rating:7.5,price:"0"},
   ], alternatives:[
     {label:"Ollama",url:"http://localhost:11434"},
     {label:"LM Studio",url:"http://localhost:1234"},
@@ -630,6 +615,7 @@ let localServiceUrl = '';
 let customApiUrl = '';
 let userName = '';
 let customModels = {}; // { providerId: [ {id, label} ] }
+let providerConfigs = {}; // { providerId: { apiKey, customModel, localServiceUrl, customApiUrl, selectedModelId, customModels } }
 
 // Load config from file
 async function loadConfigFromFile() {
@@ -646,6 +632,7 @@ async function loadConfigFromFile() {
     customApiUrl = savedConfig.customApiUrl || '';
     userName = savedConfig.userName || '';
     customModels = savedConfig.customModels || {};
+    providerConfigs = savedConfig.providerConfigs || {};
     const theme = savedConfig.theme || '#2a2a2a';
     applyTheme(theme);
   } else {
@@ -655,11 +642,23 @@ async function loadConfigFromFile() {
 }
 
 async function persistConfig() {
+  // Save current provider's config into providerConfigs
+  if (selectedProviderId) {
+    providerConfigs[selectedProviderId] = {
+      apiKey,
+      customModel,
+      localServiceUrl,
+      customApiUrl,
+      selectedModelId,
+      customModels: customModels[selectedProviderId] || [],
+    };
+  }
   const cfg = {
     providerId: selectedProviderId,
     apiKey, baseUrl: '', selectedModelId, customModel, localServiceUrl, customApiUrl, userName,
     theme: localStorage.getItem('ibwhale_theme') || '#2a2a2a',
     customModels,
+    providerConfigs,
   };
   // Derive baseUrl from current provider
   const p = PROVIDERS.find(x => x.id === selectedProviderId);
@@ -735,9 +734,10 @@ const LOCAL_ALTS = PROVIDERS.find(p => p.id === 'local')?.alternatives || [];
 const grid = document.getElementById('provider-grid');
 PROVIDERS.forEach(p => {
   const el = document.createElement('div');
-  el.className = 'api-provider-item' + (p.id === selectedProviderId ? ' active' : '') + (p.id === savedConfig?.providerId ? ' configured' : '');
+  const hasConfig = providerConfigs[p.id]?.apiKey;
+  el.className = 'api-provider-item' + (p.id === selectedProviderId ? ' active' : '') + (hasConfig ? ' configured' : '');
   el.dataset.id = p.id;
-  el.innerHTML = `<div class="provider-icon">${p.icon}</div><span class="provider-name">${p.label}</span>${p.id===savedConfig?.providerId?'<span class="provider-badge">已配置</span>':''}`;
+  el.innerHTML = `<div class="provider-icon">${p.icon}</div><span class="provider-name">${p.label}</span>${hasConfig?'<span class="provider-badge">已配置</span>':''}`;
   el.onclick = () => selectProvider(p.id);
   grid.appendChild(el);
 });
@@ -754,15 +754,17 @@ function selectProvider(id) {
   if (id === 'local') renderLocalServices();
   // For custom provider, always show custom URL field and models section hint
   if (id === 'custom') {
-    document.getElementById('api-custom-url').value = customApiUrl || '';
-    document.getElementById('api-custom-model').value = customModel || '';
+    const pc = providerConfigs[id];
+    document.getElementById('api-custom-url').value = (pc?.customApiUrl) || customApiUrl || '';
+    document.getElementById('api-custom-model').value = (pc?.customModel) || customModel || '';
   }
-  // Restore key and custom model if switching to saved provider
-  if (id === savedConfig?.providerId) {
-    document.getElementById('api-key-input').value = apiKey;
-    document.getElementById('api-custom-model').value = customModel;
-    document.getElementById('api-local-url').value = localServiceUrl;
-    document.getElementById('api-custom-url').value = customApiUrl || '';
+  // Restore config from providerConfigs if exists
+  const pc = providerConfigs[id];
+  if (pc) {
+    document.getElementById('api-key-input').value = pc.apiKey || '';
+    document.getElementById('api-custom-model').value = pc.customModel || '';
+    document.getElementById('api-local-url').value = pc.localServiceUrl || '';
+    document.getElementById('api-custom-url').value = pc.customApiUrl || '';
   } else if (id !== 'custom') {
     document.getElementById('api-key-input').value = '';
     document.getElementById('api-custom-model').value = '';
@@ -898,10 +900,11 @@ document.getElementById('api-save').onclick = () => {
   updateSidebarUser(p, modelId, customModelInput);
   // Refresh provider grid badges
   grid.querySelectorAll('.api-provider-item').forEach(el => {
-    el.classList.toggle('configured', el.dataset.id === selectedProviderId);
+    const hasCfg = providerConfigs[el.dataset.id]?.apiKey;
+    el.classList.toggle('configured', !!hasCfg);
     const badge = el.querySelector('.provider-badge');
     if (badge) badge.remove();
-    if (el.dataset.id === selectedProviderId) {
+    if (hasCfg) {
       const b = document.createElement('span');
       b.className = 'provider-badge';
       b.textContent = '已配置';
@@ -917,12 +920,19 @@ document.getElementById('api-save').onclick = () => {
 };
 
 document.getElementById('api-clear-btn').onclick = async () => {
+  // Only clear current provider's config
+  if (selectedProviderId) {
+    delete providerConfigs[selectedProviderId];
+  }
   localStorage.removeItem('ibwhale_api_config');
-  savedConfig = null; apiKey = ''; selectedProviderId = ''; selectedModelId = ''; customModel = ''; localServiceUrl = ''; customApiUrl = ''; customModels = {};
+  savedConfig = null; apiKey = ''; selectedProviderId = ''; selectedModelId = ''; customModel = ''; localServiceUrl = ''; customApiUrl = '';
   if (window.electronAPI && window.electronAPI.saveConfig) {
     try { await window.electronAPI.saveConfig(null); } catch {}
   }
-  grid.querySelectorAll('.api-provider-item').forEach(el => { el.classList.remove('active','configured'); el.querySelector('.provider-badge')?.remove(); });
+  grid.querySelectorAll('.api-provider-item').forEach(el => {
+    el.classList.remove('active','configured');
+    el.querySelector('.provider-badge')?.remove();
+  });
   document.getElementById('api-key-input').value = '';
   document.getElementById('api-custom-model').value = '';
   document.getElementById('api-local-url').value = '';
@@ -950,7 +960,7 @@ function updateModelDropdown(provider) {
   if (customModel && p) {
     const el = document.createElement('div');
     el.className = 'model-option active';
-    el.innerHTML = `<div class="model-main-row"><span class="model-name">${customModel}</span></div><div class="model-desc-row">自定义模型</div>`;
+    el.innerHTML = `<div class="model-main-row"><span class="model-name">${customModel}</span></div>`;
     dd.appendChild(el);
     document.getElementById('model-label').textContent = customModel;
     return;
@@ -961,7 +971,7 @@ function updateModelDropdown(provider) {
   prov.models.forEach(m => {
     const el = document.createElement('div');
     el.className = 'model-option' + (m.id === selectedModelId ? ' active' : '');
-    el.innerHTML = `<div class="model-main-row"><span class="model-name">${m.label}</span><span class="model-date">${m.date}</span><span class="model-rating">⭐ ${m.rating}</span><span class="model-price">$${m.price}/M</span>${m.id===selectedModelId?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10a37f" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>':''}</div><div class="model-desc-row">${m.desc}</div>`;
+    el.innerHTML = `<div class="model-main-row"><span class="model-name">${m.label}</span><span class="model-date">${m.date}</span><span class="model-rating">⭐ ${m.rating}</span><span class="model-price">\$$${m.price}/M</span>${m.id===selectedModelId?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10a37f" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>':''}</div>`;
       el.onclick = () => {
       selectedModelId = m.id;
       document.getElementById('model-label').textContent = m.label;
@@ -970,10 +980,10 @@ function updateModelDropdown(provider) {
       dd.classList.remove('open');
       document.getElementById('model-chevron').style.transform = '';
       // Switch model via env
-      const sp = PROVIDERS.find(x => x.id === savedConfig?.providerId);
-      if (sp && savedConfig?.apiKey) {
+      const sp = PROVIDERS.find(x => x.id === selectedProviderId);
+      if (sp && apiKey) {
         const base = sp.isCustom ? (customApiUrl || sp.apiBaseUrl) : sp.apiBaseUrl;
-        applyModelEnv(savedConfig.apiKey, base, m.id);
+        applyModelEnv(apiKey, base, m.id);
       }
     };
     dd.appendChild(el);
@@ -991,10 +1001,10 @@ function updateModelDropdown(provider) {
       el.classList.add('active');
       dd.classList.remove('open');
       document.getElementById('model-chevron').style.transform = '';
-      const sp = PROVIDERS.find(x => x.id === savedConfig?.providerId);
-      if (sp && savedConfig?.apiKey) {
+      const sp = PROVIDERS.find(x => x.id === selectedProviderId);
+      if (sp && apiKey) {
         const base = sp.isCustom ? (customApiUrl || sp.apiBaseUrl) : sp.apiBaseUrl;
-        applyModelEnv(savedConfig.apiKey, base, cm.id);
+        applyModelEnv(apiKey, base, cm.id);
       }
     };
     dd.appendChild(el);
