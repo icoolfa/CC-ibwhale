@@ -1171,6 +1171,8 @@ function doAutoUpdate() {
       </div>`;
   });
 }
+// Expose to global for inline onclick handler
+window.doAutoUpdate = doAutoUpdate;
 
 // Listen for update progress
 if (window.electronAPI.onUpdateProgress) {
