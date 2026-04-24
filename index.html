@@ -70,6 +70,57 @@
     .win-btn:hover { background: var(--bg-hover); color: var(--text); }
     .win-btn.close:hover { background: #e81123; color: #fff; }
 
+    /* ── Token Usage Widget ── */
+    .token-widget { display: none; align-items: center; gap: 2px; cursor: pointer; position: relative; -webkit-app-region: no-drag; padding: 4px 6px; border-radius: 8px; transition: background 0.15s; max-width: 220px; overflow: hidden; }
+    .token-widget:hover { background: var(--bg-hover); }
+    .token-text { font-size: 11px; color: var(--text-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .token-text b { color: var(--text); font-weight: 600; }
+    /* Token filter tabs */
+    .token-filter-tabs { display: flex; gap: 4px; margin-bottom: 14px; }
+    .token-filter-tab { flex: 1; padding: 6px 0; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text-sub); font-size: 12px; cursor: pointer; text-align: center; transition: all 0.15s; }
+    .token-filter-tab:hover { border-color: var(--text-sub); }
+    .token-filter-tab.active { border-color: var(--accent); color: var(--accent); background: rgba(16,163,127,0.08); }
+
+    .token-panel { position: fixed; top: 48px; right: 120px; width: 320px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; z-index: 200; box-shadow: 0 12px 40px rgba(0,0,0,0.5); display: none; animation: tokenPanelIn 0.2s ease; }
+    .token-panel.open { display: block; }
+    @keyframes tokenPanelIn { from { opacity:0; transform: translateY(-8px) scale(0.96); } to { opacity:1; transform: translateY(0) scale(1); } }
+    .token-panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .token-panel-title { font-size: 15px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 8px; }
+    .token-panel-close { background: none; border: none; color: var(--text-sub); cursor: pointer; padding: 4px; border-radius: 6px; display: flex; align-items: center; }
+    .token-panel-close:hover { background: var(--bg-hover); color: var(--text); }
+    .token-panel-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    .token-stat { text-align: center; padding: 12px 8px; background: var(--bg); border-radius: 10px; border: 1px solid var(--border); }
+    .token-stat-icon { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+    .token-stat-value { font-size: 15px; font-weight: 700; color: var(--text); margin-top: 4px; font-family: 'Consolas', monospace; word-break: break-all; }
+    .token-stat-label { font-size: 11px; color: var(--text-sub); margin-top: 2px; }
+    .token-panel-bar-wrap { margin-bottom: 12px; }
+    .token-bar-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-sub); margin-bottom: 4px; }
+    .token-bar-track { height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+    .token-bar-fill { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
+    .token-bar-fill.input-bar { background: linear-gradient(90deg, #60a5fa, #3b82f6); }
+    .token-bar-fill.output-bar { background: linear-gradient(90deg, #10a37f, #34d399); }
+    .token-bar-fill.cost-bar { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+    .token-model-list { display: flex; flex-direction: column; gap: 6px; }
+    .token-model-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--bg); border-radius: 6px; font-size: 11px; }
+    .token-model-name { min-width: 100px; max-width: 140px; color: var(--text); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .token-model-bar-wrap { flex: 1; height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
+    .token-model-bar { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--accent), #34d399); transition: width 0.4s ease; }
+    .token-model-detail { min-width: 120px; color: var(--text-sub); text-align: right; }
+    .token-model-pct { min-width: 36px; color: var(--accent); font-weight: 600; text-align: right; }
+    .token-pricing { padding: 10px 0 6px; border-top: 1px solid var(--border); margin-top: 8px; }
+    .token-ref-cost { font-size: 11px; color: var(--text-sub); text-align: center; margin-bottom: 8px; }
+    .token-ref-cost #tp-ref-cost { color: var(--text); font-weight: 600; }
+    .token-ref-model { opacity: 0.7; }
+    .token-custom-toggle { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 12px; border: 1px dashed var(--border); border-radius: 6px; background: transparent; color: var(--text-sub); font-size: 11px; cursor: pointer; width: 100%; transition: all 0.15s; }
+    .token-custom-toggle:hover { border-color: var(--accent); color: var(--accent); }
+    .token-custom-toggle.active { border-style: solid; border-color: var(--accent); color: var(--accent); background: rgba(16,163,127,0.06); }
+    .token-custom-inputs { display: flex; align-items: flex-end; gap: 8px; margin-top: 10px; }
+    .token-custom-inputs label { flex: 1; font-size: 11px; color: var(--text-sub); display: flex; flex-direction: column; gap: 4px; }
+    .token-custom-inputs input { width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 13px; font-family: 'Consolas', monospace; outline: none; }
+    .token-custom-inputs input:focus { border-color: var(--accent); }
+    .token-custom-reset { padding: 6px 12px; border: 1px solid var(--accent); border-radius: 6px; background: rgba(16,163,127,0.1); color: var(--accent); font-size: 11px; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+    .token-custom-reset:hover { background: rgba(16,163,127,0.2); }
+
     /* ── Model Switcher (web 一致) ── */
     .model-switcher { position: relative; }
     .model-btn { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); font-size: 13px; cursor: pointer; transition: background 0.15s; }
@@ -123,10 +174,10 @@
 
     /* ── Input bar ── */
     .input-bar { padding: 12px 20px 16px; flex-shrink: 0; }
-    .input-wrapper { max-width: 780px; margin: 0 auto; display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 16px; padding: 8px 12px; background: var(--bg-card); transition: border-color 0.2s; }
+    .input-wrapper { max-width: 780px; margin: 0 auto; display: flex; align-items: flex-end; gap: 8px; border: 1px solid var(--border); border-radius: 16px; padding: 8px 12px; background: var(--bg-card); transition: border-color 0.2s; }
     .input-wrapper:focus-within { border-color: var(--accent); }
-    .input-wrapper input { flex: 1; border: none; background: transparent; color: var(--text); font-size: 15px; outline: none; padding: 4px; }
-    .input-wrapper input::placeholder { color: #5a5a6e; }
+    .input-wrapper textarea { flex: 1; border: none; background: transparent; color: var(--text); font-size: 15px; outline: none; padding: 4px; resize: none; min-height: 24px; max-height: 200px; line-height: 1.5; font-family: inherit; overflow-y: auto; }
+    .input-wrapper textarea::placeholder { color: #5a5a6e; }
     .send-btn { width: 36px; height: 36px; border-radius: 50%; border: none; background: var(--bg-input); color: var(--text-sub); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; flex-shrink: 0; }
     .send-btn.on { background: var(--accent); color: #fff; }
     .input-hint { text-align: center; font-size: 12px; color: var(--text-sub); margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 8px; }
@@ -349,6 +400,10 @@
       </div>
       <div class="topbar-right">
         <span class="topbar-status" id="status-text" style="display:none;"></span>
+        <!-- Token Usage Widget -->
+        <span class="token-widget" id="token-display" title="点击查看 Token 用量详情">
+          <span class="token-text" id="token-text"></span>
+        </span>
         <button class="menu-btn" id="btn-kill" title="终止">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
         </button>
@@ -358,6 +413,13 @@
         <button class="menu-btn" id="btn-translate" title="翻译开关">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
         </button>
+        <!-- Plugin Switcher -->
+        <div class="plugin-switcher" id="plugin-switcher">
+          <button class="plugin-btn" id="btn-plugins" title="插件">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/><path d="M2 14h2"/><path d="M20 14h2"/></svg>
+          </button>
+          <div class="plugin-dropdown" id="plugin-dropdown"></div>
+        </div>
         <div class="win-btns">
           <button class="win-btn" id="btn-min"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
           <button class="win-btn" id="btn-max"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></button>
@@ -379,12 +441,12 @@
 
     <footer class="input-bar">
       <div class="input-wrapper">
-        <input type="text" id="cmd-input" placeholder="输入命令... (Enter 发送)" autocomplete="off" />
+        <textarea id="cmd-input" placeholder="输入命令... (Enter 发送，Shift+Enter 换行)" autocomplete="off" rows="1"></textarea>
         <button class="send-btn" id="cmd-send">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>
       </div>
-      <div class="input-hint">Ctrl+C 复制 | Ctrl+V 粘贴 | 右键菜单
+      <div class="input-hint">Ctrl+C 复制 | Ctrl+V 粘贴 | 右键菜单 | Shift+Enter 换行
         <button class="help-btn" id="help-btn" title="帮助与说明">?</button>
         <button class="help-btn" id="update-btn" title="检查更新" style="margin-left:4px">↑</button>
       </div>
@@ -523,6 +585,63 @@
   </div>
 </div>
 
+<!-- Token Detail Panel -->
+<div class="token-panel" id="token-panel">
+  <div class="token-panel-header">
+    <span class="token-panel-title">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      Token 消耗
+    </span>
+    <button class="token-panel-close" id="token-panel-close">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="token-filter-tabs">
+    <button class="token-filter-tab active" data-filter="today" onclick="setTokenFilter('today')">今天</button>
+    <button class="token-filter-tab" data-filter="7days" onclick="setTokenFilter('7days')">近7天</button>
+    <button class="token-filter-tab" data-filter="all" onclick="setTokenFilter('all')">全部</button>
+  </div>
+  <div class="token-panel-stats">
+    <div class="token-stat">
+      <div class="token-stat-label"><span class="token-stat-icon" style="background:#60a5fa"></span>输入</div>
+      <div class="token-stat-value" id="tp-input">0</div>
+    </div>
+    <div class="token-stat">
+      <div class="token-stat-label"><span class="token-stat-icon" style="background:#10a37f"></span>输出</div>
+      <div class="token-stat-value" id="tp-output">0</div>
+    </div>
+    <div class="token-stat">
+      <div class="token-stat-label"><span class="token-stat-icon" style="background:#f59e0b"></span>费用</div>
+      <div class="token-stat-value" id="tp-cost">¥0</div>
+    </div>
+  </div>
+  <div class="token-panel-bar-wrap">
+    <div class="token-bar-label"><span>输入 Token</span><span id="tp-input-label">0</span></div>
+    <div class="token-bar-track"><div class="token-bar-fill input-bar" id="tp-input-bar" style="width:0%"></div></div>
+  </div>
+  <div class="token-panel-bar-wrap">
+    <div class="token-bar-label"><span>输出 Token</span><span id="tp-output-label">0</span></div>
+    <div class="token-bar-track"><div class="token-bar-fill output-bar" id="tp-output-bar" style="width:0%"></div></div>
+  </div>
+  <div class="token-panel-bar-wrap">
+    <div class="token-bar-label"><span>费用 (¥)</span><span id="tp-cost-label">¥0</span></div>
+    <div class="token-bar-track"><div class="token-bar-fill cost-bar" id="tp-cost-bar" style="width:0%"></div></div>
+  </div>
+  <div class="token-pricing" id="tp-pricing">
+    <div class="token-ref-cost">参考 ccost 估价: <span id="tp-ref-cost">¥0.00</span> <span class="token-ref-model">（模型: <span id="tp-current-model">--</span>）</span></div>
+    <div class="token-custom-toggle" id="tp-custom-toggle" onclick="window.toggleCustomPricing()">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+      <span id="tp-custom-toggle-text">自定义单价</span>
+    </div>
+    <div class="token-custom-inputs" id="tp-custom-pricing" style="display:none">
+      <label>输入 ¥<input type="number" id="tp-custom-input-price" step="0.01" min="0" placeholder="0.00"></label>
+      <label>输出 ¥<input type="number" id="tp-custom-output-price" step="0.01" min="0" placeholder="0.00"></label>
+      <button class="token-custom-reset" onclick="window.recalcCustomCost()">重新计算</button>
+    </div>
+  </div>
+  <div class="token-model-list" id="tp-model-list"></div>
+</div>
+
 <!-- Context Menu -->
 <div class="ctx-menu" id="ctx-menu">
   <button class="ctx-item" id="ctx-copy"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> 复制 <span class="ctx-key">Ctrl+C</span></button>
@@ -549,6 +668,7 @@
 
 <script type="module" src="./dist/renderer.js"></script>
 <script type="module">
+const { getPrice } = require('./pricing.js');
 // ===== Providers (与 web/app.js 完全同步 =====
 const PROVIDERS = [
   { id:"aliyun", label:"阿里云百炼", icon:"☁️", apiBaseUrl:"https://dashscope.aliyuncs.com/apps/anthropic", models:[
@@ -1017,9 +1137,14 @@ document.getElementById('model-btn').onclick = (e) => {
   document.getElementById('model-dropdown').classList.toggle('open');
   document.getElementById('model-chevron').style.transform = document.getElementById('model-dropdown').classList.contains('open') ? 'rotate(180deg)' : '';
 };
-document.addEventListener('click', () => {
+document.addEventListener('click', (e) => {
   document.getElementById('model-dropdown').classList.remove('open');
   document.getElementById('model-chevron').style.transform = '';
+  document.getElementById('plugin-dropdown')?.classList.remove('open');
+  // Close token panel when clicking outside
+  if (tokenPanelOpen && !e.target.closest('#token-panel') && !e.target.closest('#token-display')) {
+    toggleTokenPanel();
+  }
 });
 
 function updateSidebarUser(p, modelId, customModelName) {
@@ -1455,6 +1580,229 @@ if (window.electronAPI?.getAppVersion) {
     if (el) el.textContent = 'ibwhale v' + v + ' · Copyright © 2026';
   }).catch(() => {});
 }
+
+// ===== Token Usage Display =====
+const CNY_RATE = 7.25; // USD to CNY rate
+let tokenPanelOpen = false;
+let lastTokenData = null;
+let tokenFilter = 'today'; // 'today' | '7days' | 'all'
+// Custom pricing (per million tokens, in ¥)
+let customInputPrice = parseFloat(localStorage.getItem('ibwhale_custom_input_price') || '-1');
+let customOutputPrice = parseFloat(localStorage.getItem('ibwhale_custom_output_price') || '-1');
+let useCustomPricing = customInputPrice >= 0 && customOutputPrice >= 0;
+
+function fmtCompact(n) {
+  // Abbreviate large numbers for topbar display
+  if (n >= 100000000) return (n / 100000000).toFixed(1).replace(/\.0$/, '') + '亿';
+  if (n >= 10000) return (n / 10000).toFixed(1).replace(/\.0$/, '') + '万';
+  return n.toLocaleString();
+}
+
+function fmtNum(n) {
+  return n.toLocaleString();
+}
+
+function updateTokenUsage() {
+  if (!window.electronAPI?.getTokenUsage) return;
+  window.electronAPI.getTokenUsage({ since: tokenFilter === 'all' ? null : tokenFilter }).then(r => {
+    if (!r.ok) return;
+    lastTokenData = r;
+    const el = document.getElementById('token-display');
+    const txt = document.getElementById('token-text');
+    el.style.display = 'inline-flex';
+    let cny;
+    const totalTokens = r.inputTokens + r.outputTokens;
+    if (useCustomPricing && customInputPrice >= 0 && customOutputPrice >= 0 && totalTokens > 0 && r.models) {
+      const customCost = r.models.reduce((sum, m) => sum + (m.input * customInputPrice / 1e6 + m.output * customOutputPrice / 1e6), 0);
+      cny = (customCost * CNY_RATE).toFixed(0);
+    } else {
+      cny = (r.cost * CNY_RATE).toFixed(0);
+    }
+    txt.innerHTML = `<b>${fmtCompact(r.inputTokens)}</b>输入 <b>${fmtCompact(r.outputTokens)}</b>输出 ¥${cny}`;
+    if (tokenPanelOpen) updateTokenPanel(r);
+  }).catch(() => {});
+}
+
+function updateTokenPanel(r) {
+  const totalTokens = r.inputTokens + r.outputTokens;
+  const useCustom = useCustomPricing && customInputPrice >= 0 && customOutputPrice >= 0 && totalTokens > 0;
+
+  let cny, displayCost;
+  if (useCustom) {
+    let customCost = 0;
+    if (r.models) {
+      customCost = r.models.reduce((sum, m) => sum + (m.input * customInputPrice / 1e6 + m.output * customOutputPrice / 1e6), 0);
+    }
+    cny = (customCost * CNY_RATE).toFixed(2);
+    displayCost = cny;
+  } else {
+    cny = (r.cost * CNY_RATE).toFixed(2);
+    displayCost = cny;
+  }
+
+  // 0值时进度条全为0
+  const inBar = totalTokens > 0 ? (r.inputTokens / totalTokens * 100) : 0;
+  const outBar = totalTokens > 0 ? (r.outputTokens / totalTokens * 100) : 0;
+
+  document.getElementById('tp-input').textContent = fmtCompact(r.inputTokens);
+  document.getElementById('tp-output').textContent = fmtCompact(r.outputTokens);
+  document.getElementById('tp-cost').textContent = '¥' + displayCost;
+  document.getElementById('tp-input-label').textContent = fmtNum(r.inputTokens) + ' tokens';
+  document.getElementById('tp-output-label').textContent = fmtNum(r.outputTokens) + ' tokens';
+  document.getElementById('tp-cost-label').textContent = '¥' + displayCost;
+  document.getElementById('tp-input-bar').style.width = inBar + '%';
+  document.getElementById('tp-output-bar').style.width = outBar + '%';
+  document.getElementById('tp-cost-bar').style.width = cny > 0 ? Math.min(cny / 10 * 100, 100) + '%' : '0%';
+
+  // Model breakdown
+  const modelEl = document.getElementById('tp-model-list');
+  if (r.models && r.models.length > 0) {
+    const rows = r.models.map(m => {
+      let mcny;
+      if (useCustom) {
+        mcny = ((m.input * customInputPrice + m.output * customOutputPrice) / 1e6 * CNY_RATE).toFixed(2);
+      } else {
+        mcny = (m.cost * CNY_RATE).toFixed(2);
+      }
+      const inLabel = fmtCompact(m.input);
+      const outLabel = fmtCompact(m.output);
+      return `<div class="token-model-row">
+        <span class="token-model-name">${m.name}</span>
+        <span class="token-model-bar-wrap"><span class="token-model-bar" style="width:${m.pct}%"></span></span>
+        <span class="token-model-detail">${inLabel}入 ${outLabel}出 ¥${mcny}</span>
+        <span class="token-model-pct">${m.pct}%</span>
+      </div>`;
+    }).join('');
+    modelEl.innerHTML = rows;
+    modelEl.style.display = 'block';
+  } else {
+    modelEl.innerHTML = '<span style="color:var(--text-sub)">暂无数据</span>';
+    modelEl.style.display = 'block';
+  }
+
+  // Pricing section
+  const pricingEl = document.getElementById('tp-pricing');
+  if (pricingEl) {
+    const refEl = document.getElementById('tp-ref-cost');
+    const curEl = document.getElementById('tp-current-model');
+    if (r.models && r.models.length > 0) {
+      refEl.textContent = '¥' + (r.cost * CNY_RATE).toFixed(2);
+      curEl.textContent = r.models[0].name;
+    }
+  }
+
+  const custEl = document.getElementById('tp-custom-pricing');
+  if (custEl) {
+    const inInput = document.getElementById('tp-custom-input-price');
+    const outInput = document.getElementById('tp-custom-output-price');
+    // 首次打开时填入默认值（ccost换算为每百万¥）
+    if (inInput.value === '' || inInput.value === '0') {
+      const defaultInput = ((r.models && r.models[0] ? getPrice(r.models[0].name)?.input || 0.000003 : 0.000003) * 1e6 * CNY_RATE).toFixed(2);
+      const defaultOutput = ((r.models && r.models[0] ? getPrice(r.models[0].name)?.output || 0.000015 : 0.000015) * 1e6 * CNY_RATE).toFixed(2);
+      inInput.value = defaultInput;
+      outInput.value = defaultOutput;
+    }
+  }
+}
+
+function setTokenFilter(f) {
+  tokenFilter = f;
+  document.querySelectorAll('.token-filter-tab').forEach(t => t.classList.toggle('active', t.dataset.filter === f));
+  updateTokenUsage();
+}
+
+function toggleTokenPanel() {
+  tokenPanelOpen = !tokenPanelOpen;
+  document.getElementById('token-panel').classList.toggle('open', tokenPanelOpen);
+  // Restore custom pricing UI state
+  const custEl = document.getElementById('tp-custom-pricing');
+  const toggleEl = document.getElementById('tp-custom-toggle');
+  if (custEl && toggleEl) {
+    custEl.style.display = useCustomPricing ? 'flex' : 'none';
+    toggleEl.classList.toggle('active', useCustomPricing);
+    if (useCustomPricing) {
+      document.getElementById('tp-custom-input-price').value = customInputPrice;
+      document.getElementById('tp-custom-output-price').value = customOutputPrice;
+    }
+  }
+  if (tokenPanelOpen && lastTokenData) updateTokenPanel(lastTokenData);
+}
+
+window.setTokenFilter = setTokenFilter;
+window.toggleTokenPanel = toggleTokenPanel;
+window.toggleCustomPricing = toggleCustomPricing;
+window.recalcCustomCost = recalcCustomCost;
+
+function toggleCustomPricing() {
+  useCustomPricing = !useCustomPricing;
+  const custEl = document.getElementById('tp-custom-pricing');
+  const toggleEl = document.getElementById('tp-custom-toggle');
+  custEl.style.display = useCustomPricing ? 'flex' : 'none';
+  toggleEl.classList.toggle('active', useCustomPricing);
+  if (useCustomPricing && lastTokenData) {
+    recalcCustomCost();
+  }
+  if (!useCustomPricing) {
+    localStorage.removeItem('ibwhale_custom_input_price');
+    localStorage.removeItem('ibwhale_custom_output_price');
+  }
+}
+
+function recalcCustomCost() {
+  const inInput = document.getElementById('tp-custom-input-price');
+  const outInput = document.getElementById('tp-custom-output-price');
+  customInputPrice = parseFloat(inInput.value);
+  customOutputPrice = parseFloat(outInput.value);
+  if (isNaN(customInputPrice) || isNaN(customOutputPrice) || customInputPrice < 0 || customOutputPrice < 0) return;
+  localStorage.setItem('ibwhale_custom_input_price', customInputPrice);
+  localStorage.setItem('ibwhale_custom_output_price', customOutputPrice);
+  useCustomPricing = true;
+  if (lastTokenData) updateTokenPanel(lastTokenData);
+}
+
+document.getElementById('token-display').onclick = (e) => { e.stopPropagation(); toggleTokenPanel(); };
+document.getElementById('token-panel-close').onclick = () => toggleTokenPanel();
+
+setInterval(updateTokenUsage, 30000);
+setTimeout(updateTokenUsage, 3000);
+
+// ===== Plugin Panel =====
+const PLUGINS = [
+  { id:'whip', label:'鞭子', desc:'物理鞭子动画特效', icon:'🪢', action:'toggleWhip', installed:true },
+  { id:'superpowers', label:'Super Powers', desc:'Skills 优先级管理 + 流程控制', icon:'⚡', installed:true },
+  // { id:'claudezh', label:'Claude中文插件', desc:'中文 Skills + MCP 工具 + 额度追踪', icon:'🌐', github:'https://github.com/aiai-go/claudezh', installed:false },
+];
+
+function renderPlugins() {
+  const dd = document.getElementById('plugin-dropdown');
+  const items = PLUGINS.map(p => {
+    let actionHtml = '';
+    if (p.action === 'toggleWhip') {
+      actionHtml = `<button onclick="event.stopPropagation(); window.electronAPI?.toggleWhip?.();" title="挥鞭" style="background:var(--bg-input);border:1px solid var(--border);color:var(--text);padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px;flex-shrink:0;">挥鞭</button>`;
+    } else if (p.github) {
+      actionHtml = `<a href="#" onclick="event.preventDefault(); window.electronAPI?.openUrl('${p.github}');" title="GitHub" style="color:var(--text-sub);padding:4px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+      </a>`;
+    }
+    return `
+    <div class="plugin-item">
+      <div class="plugin-icon">${p.icon}</div>
+      <div class="plugin-info">
+        <div class="plugin-name">${p.label}</div>
+        <div class="plugin-desc">${p.desc}</div>
+      </div>
+      ${actionHtml}
+    </div>`;
+  }).join('');
+  dd.innerHTML = items || '<div class="plugin-empty">暂无插件</div>';
+}
+
+document.getElementById('btn-plugins').onclick = (e) => {
+  e.stopPropagation();
+  document.getElementById('plugin-dropdown').classList.toggle('open');
+  document.getElementById('model-dropdown').classList.remove('open');
+  renderPlugins();
+};
 </script>
 </body>
 </html>

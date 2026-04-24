@@ -1027,6 +1027,105 @@ ipcMain.on('window-close', (event) => {
   win?.close();
 });
 
+// ===== Token Usage =====
+const { calcCost, getPrice } = require('./pricing.js');
+
+let _tokenUsageCache = {}; // { cacheKey: { result, time } }
+
+ipcMain.handle('get-token-usage', (_event, filter = {}) => {
+  try {
+    // Build cache key from filter
+    const cacheKey = JSON.stringify(filter);
+    const now = Date.now();
+    const cached = _tokenUsageCache[cacheKey];
+    if (cached && now - cached.time < 10000) return cached.result;
+
+    const projectsDir = path.join(os.homedir(), '.claude', 'projects');
+    if (!fs.existsSync(projectsDir)) return { ok: false };
+
+    // Parse date filter
+    const today = new Date();
+    const todayStr = today.toISOString().slice(0, 10); // YYYY-MM-DD
+    const sinceDate = filter.since === 'today' ? todayStr :
+                      filter.since === '7days' ? new Date(today - 7 * 86400000).toISOString().slice(0, 10) :
+                      null;
+
+    let totalInput = 0, totalOutput = 0, entryCount = 0;
+    const modelStats = {}; // { model: { input, output, count } }
+
+    // Determine which projects to scan
+    const projectDirs = filter.project
+      ? [filter.project]
+      : fs.readdirSync(projectsDir);
+
+    for (const projectDir of projectDirs) {
+      const projectPath = path.join(projectsDir, projectDir);
+      if (!fs.existsSync(projectPath) || !fs.statSync(projectPath).isDirectory()) continue;
+
+      for (const sessionFile of fs.readdirSync(projectPath)) {
+        if (!sessionFile.endsWith('.jsonl')) continue;
+        try {
+          const content = fs.readFileSync(path.join(projectPath, sessionFile), 'utf-8');
+          for (const line of content.split('\n')) {
+            if (!line.trim()) continue;
+            try {
+              const obj = JSON.parse(line);
+              const ts = obj?.timestamp?.slice(0, 10); // YYYY-MM-DD
+              if (sinceDate && ts && ts < sinceDate) continue;
+
+              const msg = obj?.message;
+              const u = msg?.usage;
+              if (u && (u.input_tokens > 0 || u.output_tokens > 0)) {
+                const inp = u.input_tokens || 0;
+                const out = u.output_tokens || 0;
+                totalInput += inp;
+                totalOutput += out;
+                entryCount++;
+                const m = msg.model || '';
+                if (m && m !== '<synthetic>' && m !== 'unknown') {
+                  if (!modelStats[m]) modelStats[m] = { input: 0, output: 0, count: 0 };
+                  modelStats[m].input += inp;
+                  modelStats[m].output += out;
+                  modelStats[m].count++;
+                }
+              }
+            } catch {}
+          }
+        } catch {}
+      }
+    }
+
+    // Build per-model breakdown sorted by usage
+    const totalTokens = totalInput + totalOutput;
+    const models = Object.entries(modelStats)
+      .map(([name, s]) => {
+        const p = getPrice(name);
+        const mCost = p ? s.input * p.input + s.output * p.output : 0;
+        const pct = totalTokens > 0 ? ((s.input + s.output) / totalTokens * 100).toFixed(1) : 0;
+        return { name, input: s.input, output: s.output, cost: mCost, pct };
+      })
+      .sort((a, b) => (b.input + b.output) - (a.input + a.output));
+
+    // Total cost = sum of per-model costs
+    const totalCost = models.reduce((sum, m) => sum + m.cost, 0);
+
+    const result = {
+      ok: true,
+      inputTokens: totalInput,
+      outputTokens: totalOutput,
+      cost: totalCost,
+      count: entryCount,
+      models, // [{ name, input, output, cost, pct }, ...]
+    };
+
+    _tokenUsageCache[cacheKey] = { result, time: now };
+    return result;
+  } catch (e) {
+    console.error('[ibwhale] get-token-usage error:', e.message);
+    return { ok: false };
+  }
+});
+
 // ===== App 生命周期 =====
 app.whenReady().then(() => {
   createWindow();

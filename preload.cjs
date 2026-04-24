@@ -51,4 +51,5 @@ window.electronAPI = {
   },
   openNewWindow: () => ipcRenderer.send('open-new-window'),
   toggleWhip: () => ipcRenderer.send('toggle-whip'),
+  getTokenUsage: (filter) => ipcRenderer.invoke('get-token-usage', filter || {}),
 };
