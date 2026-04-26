@@ -215,6 +215,11 @@
     .model-tag { font-size: 11px; padding: 3px 8px; border-radius: 4px; background: var(--bg-card); color: var(--text-sub); border: 1px solid var(--border); cursor: pointer; transition: all 0.15s; }
     .model-tag:hover { border-color: var(--accent); color: var(--accent); }
     .model-tag.sel { background: rgba(16,163,127,0.15); color: var(--accent); border-color: var(--accent); font-weight: 600; }
+    .api-add-btn { padding: 3px 12px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--accent); font-size: 12px; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+    .api-add-btn:hover { border-color: var(--accent); background: rgba(16,163,127,0.1); }
+    .model-tag.custom { font-style: italic; position: relative; padding-right: 18px !important; }
+    .model-del { position: absolute; top: -7px; right: -7px; width: 14px; height: 14px; line-height: 14px; text-align: center; border-radius: 50%; background: #ff4757; color: #fff; font-size: 10px; cursor: pointer; display: none; z-index: 1; }
+    .model-tag.custom:hover .model-del { display: block; }
     .api-save { width: 100%; padding: 11px; border: none; border-radius: 10px; background: var(--accent); color: #fff; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.15s; }
     .api-save:hover { background: var(--accent-hover); }
     .api-clear { text-align: center; margin-top: 12px; }
@@ -561,7 +566,10 @@
       </div>
       <div class="api-input-group">
         <label>模型 ID <span class="optional">可选</span></label>
-        <input type="text" id="api-custom-model" placeholder="留空使用默认模型" />
+        <div style="display:flex;gap:6px;">
+          <input type="text" id="api-custom-model" placeholder="输入模型 ID" style="flex:1;" />
+          <button id="add-model-btn" class="api-add-btn" title="添加模型">+ 添加</button>
+        </div>
       </div>
     </div>
     <div class="api-status" id="api-status" style="display:none;"></div>
@@ -918,11 +926,10 @@ function renderLocalServices() {
 function renderModels(p) {
   const section = document.getElementById('api-models-section');
   const list = document.getElementById('api-models-list');
-  if (!p || !p.models.length) { section.style.display = 'none'; return; }
+  const cms = (p && customModels[p.id]) || [];
+  if (!p || (!p.models.length && !cms.length)) { section.style.display = 'none'; return; }
   section.style.display = 'block';
   list.innerHTML = '';
-  // Custom models for this provider
-  const cms = customModels[p.id] || [];
   // Built-in models
   p.models.forEach(m => {
     const tag = document.createElement('span');
@@ -939,18 +946,53 @@ function renderModels(p) {
   // Custom models (gray)
   cms.forEach(cm => {
     const tag = document.createElement('span');
-    tag.className = 'model-tag' + (cm.id === selectedModelId ? ' sel' : '');
-    tag.textContent = cm.label;
-    tag.style.opacity = '0.6';
-    tag.style.fontStyle = 'italic';
+    tag.className = 'model-tag custom' + (cm.id === selectedModelId ? ' sel' : '');
+    const delBtn = document.createElement('span');
+    delBtn.className = 'model-del';
+    delBtn.textContent = '×';
+    delBtn.title = '删除模型';
+    delBtn.onclick = (e) => { e.stopPropagation(); removeCustomModel(cm.id); };
+    tag.appendChild(delBtn);
+    tag.appendChild(document.createTextNode(cm.label));
     tag.onclick = () => {
       selectedModelId = cm.id;
       document.getElementById('api-custom-model').value = '';
       list.querySelectorAll('.model-tag').forEach(t => t.classList.remove('sel'));
       tag.classList.add('sel');
     };
+    tag.oncontextmenu = (e) => { e.preventDefault(); removeCustomModel(cm.id); };
     list.appendChild(tag);
   });
+}
+
+function addCustomModel() {
+  const input = document.getElementById('api-custom-model');
+  const modelId = input.value.trim();
+  if (!modelId) return;
+  const p = PROVIDERS.find(x => x.id === selectedProviderId);
+  if (!p) return;
+  if (!customModels[p.id]) customModels[p.id] = [];
+  if (customModels[p.id].find(m => m.id === modelId)) {
+    return showApiStatus('模型已存在', true);
+  }
+  customModels[p.id].push({ id: modelId, label: modelId });
+  input.value = '';
+  renderModels(p);
+  persistConfig();
+  showApiStatus('已添加: ' + modelId, false);
+}
+
+function removeCustomModel(modelId) {
+  const p = PROVIDERS.find(x => x.id === selectedProviderId);
+  if (!p || !customModels[p.id]) return;
+  customModels[p.id] = customModels[p.id].filter(m => m.id !== modelId);
+  if (selectedModelId === modelId) {
+    selectedModelId = '';
+    document.getElementById('model-label').textContent = '选择模型';
+  }
+  renderModels(p);
+  persistConfig();
+  showApiStatus('已删除: ' + modelId, false);
 }
 
 // ===== API Eye Toggle =====
@@ -968,6 +1010,8 @@ document.getElementById('open-api-settings').onclick = () => document.getElement
 document.getElementById('api-close').onclick = () => document.getElementById('api-overlay').classList.remove('open');
 document.getElementById('api-overlay').onclick = (e) => { if (e.target.id === 'api-overlay') e.target.classList.remove('open'); };
 
+document.getElementById('add-model-btn').onclick = addCustomModel;
+
 document.getElementById('api-save').onclick = () => {
   const key = document.getElementById('api-key-input').value.trim();
   const customModelInput = document.getElementById('api-custom-model').value.trim();
@@ -979,9 +1023,9 @@ document.getElementById('api-save').onclick = () => {
   // Custom provider requires URL and model name
   if (p?.isCustom) {
     if (!customUrl) return showApiStatus('请输入 API 地址', true);
-    if (!customModelInput) return showApiStatus('请输入模型 ID', true);
+    if (!customModelInput && !selectedModelId) return showApiStatus('请输入或选择模型 ID', true);
   }
-  let modelId = customModelInput || selectedModelId || p?.models[0]?.id || '';
+  let modelId = customModelInput || selectedModelId || p?.models[0]?.id || (p?.isCustom ? '' : '');
   // Custom URL overrides default; local provider uses localUrl or customUrl; custom provider uses customUrl
   let baseUrl;
   if (customUrl) {
@@ -992,13 +1036,6 @@ document.getElementById('api-save').onclick = () => {
     baseUrl = customUrl;
   } else {
     baseUrl = p?.apiBaseUrl;
-  }
-  // Track custom model
-  if (customModelInput && p) {
-    if (!customModels[p.id]) customModels[p.id] = [];
-    if (!customModels[p.id].find(m => m.id === customModelInput)) {
-      customModels[p.id].push({ id: customModelInput, label: customModelInput });
-    }
   }
   const cfg = {
     providerId: selectedProviderId,
@@ -1043,6 +1080,7 @@ document.getElementById('api-clear-btn').onclick = async () => {
   // Only clear current provider's config
   if (selectedProviderId) {
     delete providerConfigs[selectedProviderId];
+    if (customModels[selectedProviderId]) delete customModels[selectedProviderId];
   }
   localStorage.removeItem('ibwhale_api_config');
   savedConfig = null; apiKey = ''; selectedProviderId = ''; selectedModelId = ''; customModel = ''; localServiceUrl = ''; customApiUrl = '';

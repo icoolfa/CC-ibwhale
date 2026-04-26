@@ -147,7 +147,9 @@ async function llmTranslate(text, config) {
     const maxLen = 500;
     if (text.length > maxLen)
         text = text.slice(0, maxLen);
-    if (provider === 'claude') {
+    const anthropicProviders = ['aliyun', 'deepseek', 'zhipu', 'moonshot', 'claude', 'anthropic'];
+    const isAnthropic = anthropicProviders.includes(provider) || (config.baseUrl || '').includes('/anthropic');
+    if (isAnthropic) {
         const resp = await fetch(`${config.baseUrl}/v1/messages`, {
             method: 'POST',
             headers: {

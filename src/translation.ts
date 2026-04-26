@@ -22,7 +22,10 @@ export async function translate(text: string, config?: TranslateConfig): Promise
 async function llmTranslate(text: string, config: TranslateConfig): Promise<string> {
   const provider = (config.provider || 'openai').toLowerCase();
   const baseUrl = config.baseUrl.replace(/\/+$/, '');
-  const isAnthropic = provider === 'claude' || baseUrl.includes('/anthropic');
+  const anthropicProviders = ['aliyun', 'deepseek', 'zhipu', 'moonshot'];
+  const isAnthropic = provider === 'claude' || provider === 'anthropic' ||
+                      anthropicProviders.includes(provider) ||
+                      baseUrl.includes('/anthropic');
   const maxLen = 2000;
   if (text.length > maxLen) text = text.slice(0, maxLen) + '...';
 

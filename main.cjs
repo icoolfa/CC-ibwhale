@@ -873,7 +873,10 @@ ipcMain.handle('translate', async (_event, text) => {
 
   const provider = (cfg.providerId || 'anthropic').toLowerCase();
   const baseUrl = cfg.baseUrl.replace(/\/+$/, '');
-  const isAnthropic = provider === 'claude' || provider === 'anthropic' || baseUrl.includes('/anthropic');
+  const anthropicProviders = ['aliyun', 'deepseek', 'zhipu', 'moonshot'];
+  const isAnthropic = provider === 'claude' || provider === 'anthropic' ||
+                      anthropicProviders.includes(provider) ||
+                      baseUrl.includes('/anthropic');
 
   const systemPrompt = '请将以下文本翻译成中文，只返回翻译结果，不解释。';
 
