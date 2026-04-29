@@ -978,6 +978,88 @@ function httpRequest(urlStr, body, headers, timeoutMs) {
   });
 }
 
+// ===== Fetch Models List =====
+ipcMain.handle('fetch-models', async (_event, { baseUrl, apiKey }) => {
+  if (!baseUrl) return { error: '请配置 API 地址', models: [] };
+
+  // Derive models URL from baseUrl: strip path, append /v1/models
+  let modelsUrl;
+  try {
+    const u = new URL(baseUrl);
+    modelsUrl = u.protocol + '//' + u.host + '/v1/models';
+  } catch {
+    return { error: '无效的 API 地址', models: [] };
+  }
+
+  // Special handling for Ollama
+  if (baseUrl.includes('localhost:11434') || baseUrl.includes('127.0.0.1:11434')) {
+    modelsUrl = baseUrl.replace(/\/+$/, '') + '/api/tags';
+  }
+
+  return new Promise((resolve) => {
+    const url = new URL(modelsUrl);
+    const transport = url.protocol === 'https:' ? https : http;
+    const options = {
+      method: 'GET',
+      hostname: url.hostname,
+      port: url.port || (url.protocol === 'https:' ? 443 : 80),
+      path: url.pathname + url.search,
+      headers: { 'Connection': 'close' },
+      timeout: 15000,
+    };
+    if (apiKey && !modelsUrl.includes('/api/tags')) {
+      options.headers['Authorization'] = 'Bearer ' + apiKey;
+    }
+
+    const req = transport.request(options, (res) => {
+      let data = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => (data += chunk));
+      res.on('end', () => {
+        try {
+          if (res.statusCode >= 400) {
+            let msg = 'HTTP ' + res.statusCode;
+            if (res.statusCode === 401) msg = 'API Key 无效';
+            else if (res.statusCode === 403) msg = '无权限访问该接口';
+            else if (res.statusCode === 404) msg = '不支持获取模型列表';
+            return resolve({ error: msg, models: [] });
+          }
+          const json = JSON.parse(data);
+          let models = [];
+
+          // Ollama format: { models: [{ name: "llama3:latest", ... }] }
+          if (json.models && Array.isArray(json.models) && typeof json.models[0] === 'object' && json.models[0].name) {
+            models = json.models.map(m => ({
+              id: m.name.replace(/:.+$/, ''),
+              label: m.name,
+            }));
+          }
+          // OpenAI format: { data: [{ id: "model-name", ... }] }
+          else if (json.data && Array.isArray(json.data)) {
+            models = json.data.map(m => ({
+              id: m.id,
+              label: m.id.split('/').pop(),
+            }));
+          }
+
+          resolve({ models, error: null });
+        } catch {
+          resolve({ error: '响应解析失败', models: [] });
+        }
+      });
+    });
+    req.on('error', (e) => {
+      let msg = '网络错误: ' + (e.code || e.message);
+      if (e.code === 'ENOTFOUND') msg = '无法连接到该 API 地址';
+      else if (e.code === 'ECONNREFUSED') msg = '连接被拒绝';
+      else if (e.code === 'ETIMEDOUT' || e.code === 'ECONNRESET') msg = '请求超时';
+      resolve({ error: msg, models: [] });
+    });
+    req.on('timeout', () => { req.destroy(); resolve({ error: '请求超时', models: [] }); });
+    req.end();
+  });
+});
+
 // ===== IPC: PTY 控制 =====
 ipcMain.on('pty-kill', (event) => {
   const { info } = getWindowInfo(event);

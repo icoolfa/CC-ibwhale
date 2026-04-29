@@ -209,6 +209,7 @@
     .api-status { padding: 8px 12px; border-radius: 8px; font-size: 13px; text-align: center; margin-bottom: 12px; }
     .api-status.ok { background: rgba(16,163,127,0.12); color: var(--accent); }
     .api-status.err { background: rgba(248,113,113,0.12); color: var(--error); }
+    .api-url-preview { padding: 6px 12px; border-radius: 8px; font-size: 12px; color: var(--text-sub); background: var(--bg-card); border: 1px solid var(--border); text-align: center; margin-bottom: 12px; word-break: break-all; font-family: monospace; }
     .api-models { margin-bottom: 16px; padding: 10px 14px; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); }
     .api-models-label { font-size: 11px; color: var(--text-sub); display: block; margin-bottom: 6px; }
     .api-models-list { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -218,6 +219,8 @@
     .api-add-btn { padding: 3px 12px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--accent); font-size: 12px; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
     .api-add-btn:hover { border-color: var(--accent); background: rgba(16,163,127,0.1); }
     .model-tag.custom { font-style: italic; position: relative; padding-right: 18px !important; }
+    .model-tag.dynamic { border-color: rgba(16,163,127,0.4); }
+    .model-tag.dynamic.sel { background: rgba(16,163,127,0.2); color: var(--accent); border-color: var(--accent); font-weight: 600; }
     .model-del { position: absolute; top: -7px; right: -7px; width: 14px; height: 14px; line-height: 14px; text-align: center; border-radius: 50%; background: #ff4757; color: #fff; font-size: 10px; cursor: pointer; display: none; z-index: 1; }
     .model-tag.custom:hover .model-del { display: block; }
     .api-save { width: 100%; padding: 11px; border: none; border-radius: 10px; background: var(--accent); color: #fff; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.15s; }
@@ -552,8 +555,8 @@
         <input type="text" id="api-local-url" placeholder="自定义地址，默认 http://localhost:11434" style="margin-top:6px;" />
       </div>
       <div class="api-input-group">
-        <label>自定义 API 地址 <span class="optional">可选，留空使用默认</span></label>
-        <input type="text" id="api-custom-url" placeholder="例如: https://api.example.com/v1" />
+        <label>API 地址 <span class="optional">可选，留空使用默认</span></label>
+        <input type="text" id="api-custom-url" placeholder="例如: https://api.example.com" />
       </div>
       <div class="api-input-group">
         <label>API Key</label>
@@ -573,6 +576,7 @@
       </div>
     </div>
     <div class="api-status" id="api-status" style="display:none;"></div>
+    <div class="api-url-preview" id="api-url-preview" style="display:none;"></div>
     <div class="api-models" id="api-models-section" style="display:none;">
       <span class="api-models-label">选择模型（点击设为默认）</span>
       <div class="api-models-list" id="api-models-list"></div>
@@ -709,6 +713,7 @@ const PROVIDERS = [
     {id:"kimi-k2-thinking",label:"Kimi K2 Thinking",date:"2026-01",rating:8.8,price:"0.6/2.5"},
     {id:"kimi-k2",label:"Kimi K2",date:"2025-07",rating:8.4,price:"0.5/2"},
   ]},
+  { id:"linktoken", label:"linktoken", icon:'<img src="img/linktoken logo small 256.png" style="width:22px;height:22px;object-fit:contain">', apiBaseUrl:"https://linktoken.ai", models:[] },
   { id:"openrouter", label:"OpenRouter", icon:"🔗", apiBaseUrl:"https://openrouter.ai/api/v1", models:[
     {id:"anthropic/claude-sonnet-4-6",label:"Claude Sonnet 4.6",date:"2026-02",rating:9.1,price:"3/15"},
     {id:"anthropic/claude-opus-4-6",label:"Claude Opus 4.6",date:"2026-02",rating:9.4,price:"15/75"},
@@ -744,6 +749,9 @@ let customApiUrl = '';
 let userName = '';
 let customModels = {}; // { providerId: [ {id, label} ] }
 let providerConfigs = {}; // { providerId: { apiKey, customModel, localServiceUrl, customApiUrl, selectedModelId, customModels } }
+let dynamicModels = {}; // { providerId: [ {id, label} ] } — models fetched from API
+let fetchModelsTimer = null;
+let fetchModelsLoading = false;
 
 // Load config from file
 async function loadConfigFromFile() {
@@ -761,6 +769,7 @@ async function loadConfigFromFile() {
     userName = savedConfig.userName || '';
     customModels = savedConfig.customModels || {};
     providerConfigs = savedConfig.providerConfigs || {};
+    dynamicModels = savedConfig.dynamicModels || {};
     const theme = savedConfig.theme || '#2a2a2a';
     applyTheme(theme);
   } else {
@@ -787,6 +796,7 @@ async function persistConfig() {
     theme: localStorage.getItem('ibwhale_theme') || '#2a2a2a',
     customModels,
     providerConfigs,
+    dynamicModels,
   };
   // Derive baseUrl from current provider
   const p = PROVIDERS.find(x => x.id === selectedProviderId);
@@ -900,6 +910,36 @@ function selectProvider(id) {
     document.getElementById('api-custom-url').value = '';
   }
   renderModels(p);
+  updateUrlPreview();
+}
+
+function updateUrlPreview() {
+  const preview = document.getElementById('api-url-preview');
+  const p = PROVIDERS.find(x => x.id === selectedProviderId);
+  if (!p) { preview.style.display = 'none'; return; }
+
+  const customUrl = normalizeUrl(document.getElementById('api-custom-url').value.trim());
+  const localUrl = document.getElementById('api-local-url').value.trim();
+  const baseUrl = (p.isCustom && customUrl) || (selectedProviderId === 'local' && localUrl) || customUrl || p.apiBaseUrl;
+  if (!baseUrl) { preview.style.display = 'none'; return; }
+
+  // Check if URL already has a path segment
+  let fullUrl;
+  try {
+    const urlObj = new URL(baseUrl);
+    if (urlObj.pathname.length > 1) {
+      // URL already has a path, use as-is
+      fullUrl = baseUrl;
+    } else {
+      // No path: SDK will append /v1/messages
+      fullUrl = baseUrl.replace(/\/+$/, '') + '/v1/messages';
+    }
+  } catch {
+    fullUrl = baseUrl; // Invalid URL, show as-is
+  }
+
+  preview.textContent = fullUrl;
+  preview.style.display = 'block';
 }
 
 function renderLocalServices() {
@@ -914,6 +954,7 @@ function renderLocalServices() {
       document.getElementById('api-local-url').value = alt.url;
       container.querySelectorAll('.local-service-tag').forEach(t => t.classList.remove('active'));
       tag.classList.add('active');
+      updateUrlPreview();
     };
     container.appendChild(tag);
   });
@@ -923,26 +964,124 @@ function renderLocalServices() {
   container.appendChild(orSpan);
 }
 
+// ===== Fetch Models from Provider =====
+async function fetchModelsFromProvider(providerId, key) {
+  const p = PROVIDERS.find(x => x.id === providerId);
+  if (!p) return;
+
+  // Build baseUrl for model fetching (use OpenAI-compatible endpoint)
+  let baseUrl;
+  if (providerId === 'local') {
+    baseUrl = localServiceUrl || p.apiBaseUrl;
+  } else if (p.isCustom) {
+    baseUrl = normalizeUrl(document.getElementById('api-custom-url').value.trim());
+  } else {
+    // Use OpenAI-compatible endpoint instead of Anthropic endpoint
+    const u = p.apiBaseUrl;
+    if (u.endsWith('/anthropic')) {
+      baseUrl = u.replace(/\/anthropic$/, '');
+    } else if (u.endsWith('/apps/anthropic')) {
+      baseUrl = u.replace(/\/apps\/anthropic$/, '');
+    } else {
+      baseUrl = u;
+    }
+  }
+
+  if (!baseUrl && providerId !== 'local') return;
+
+  fetchModelsLoading = true;
+  renderModels(p); // Re-render to show loading state
+
+  const result = await window.electronAPI.fetchModels({ baseUrl, apiKey: key });
+  fetchModelsLoading = false;
+
+  if (result.error) {
+    showApiStatus(result.error, true);
+    return;
+  }
+
+  if (result.models.length > 0) {
+    dynamicModels[providerId] = result.models;
+    showApiStatus('获取到 ' + result.models.length + ' 个模型', false);
+    renderModels(p);
+  } else if (!result.models.length) {
+    showApiStatus('未找到可用模型', true);
+  }
+}
+
+function triggerFetchModels() {
+  const p = PROVIDERS.find(x => x.id === selectedProviderId);
+  if (!p) return;
+  if (p.id === 'custom' && !document.getElementById('api-custom-url').value.trim()) {
+    return showApiStatus('请先输入 API 地址', true);
+  }
+  const key = document.getElementById('api-key-input').value.trim();
+  if (!key) return showApiStatus('请先输入 API Key', true);
+  fetchModelsFromProvider(selectedProviderId, key);
+}
+
+// Debounced auto-fetch on API key input
+function setupApiKeyAutoFetch() {
+  const keyInput = document.getElementById('api-key-input');
+  keyInput.addEventListener('input', () => {
+    if (fetchModelsTimer) clearTimeout(fetchModelsTimer);
+    const key = keyInput.value.trim();
+    const p = PROVIDERS.find(x => x.id === selectedProviderId);
+    if (!p || !key) return;
+    if (p.id === 'custom' && !document.getElementById('api-custom-url').value.trim()) return;
+    fetchModelsTimer = setTimeout(() => fetchModelsFromProvider(selectedProviderId, key), 1000);
+  });
+}
+
 function renderModels(p) {
   const section = document.getElementById('api-models-section');
   const list = document.getElementById('api-models-list');
   const cms = (p && customModels[p.id]) || [];
-  if (!p || (!p.models.length && !cms.length)) { section.style.display = 'none'; return; }
+  const dyn = (p && dynamicModels[p.id]) || [];
+  const hasDyn = dyn.length > 0;
+
+  if (!p || (!p.models.length && !cms.length && !hasDyn)) { section.style.display = 'none'; return; }
   section.style.display = 'block';
   list.innerHTML = '';
-  // Built-in models
-  p.models.forEach(m => {
+
+  // Dynamic models (from API) — show with different style
+  if (fetchModelsLoading) {
     const tag = document.createElement('span');
-    tag.className = 'model-tag' + (m.id === selectedModelId ? ' sel' : '');
-    tag.textContent = m.label;
-    tag.onclick = () => {
-      selectedModelId = m.id;
-      document.getElementById('api-custom-model').value = '';
-      list.querySelectorAll('.model-tag').forEach(t => t.classList.remove('sel'));
-      tag.classList.add('sel');
-    };
+    tag.className = 'model-tag loading';
+    tag.textContent = '加载中...';
+    tag.style.opacity = '0.5';
     list.appendChild(tag);
-  });
+  } else if (hasDyn) {
+    dyn.forEach(m => {
+      const tag = document.createElement('span');
+      tag.className = 'model-tag dynamic' + (m.id === selectedModelId ? ' sel' : '');
+      tag.textContent = m.label;
+      tag.onclick = () => {
+        selectedModelId = m.id;
+        document.getElementById('api-custom-model').value = '';
+        list.querySelectorAll('.model-tag').forEach(t => t.classList.remove('sel'));
+        tag.classList.add('sel');
+      };
+      list.appendChild(tag);
+    });
+  }
+
+  // Built-in models (hide if dynamic models loaded)
+  if (!hasDyn && !fetchModelsLoading) {
+    p.models.forEach(m => {
+      const tag = document.createElement('span');
+      tag.className = 'model-tag' + (m.id === selectedModelId ? ' sel' : '');
+      tag.textContent = m.label;
+      tag.onclick = () => {
+        selectedModelId = m.id;
+        document.getElementById('api-custom-model').value = '';
+        list.querySelectorAll('.model-tag').forEach(t => t.classList.remove('sel'));
+        tag.classList.add('sel');
+      };
+      list.appendChild(tag);
+    });
+  }
+
   // Custom models (gray)
   cms.forEach(cm => {
     const tag = document.createElement('span');
@@ -1008,15 +1147,32 @@ document.getElementById('api-eye-btn').onclick = () => {
 // ===== API Settings Modal =====
 document.getElementById('open-api-settings').onclick = () => document.getElementById('api-overlay').classList.add('open');
 document.getElementById('api-close').onclick = () => document.getElementById('api-overlay').classList.remove('open');
-document.getElementById('api-overlay').onclick = (e) => { if (e.target.id === 'api-overlay') e.target.classList.remove('open'); };
+
+// URL preview: update as user types
+document.getElementById('api-custom-url').addEventListener('input', updateUrlPreview);
+document.getElementById('api-local-url').addEventListener('input', updateUrlPreview);
 
 document.getElementById('add-model-btn').onclick = addCustomModel;
+
+// Normalize URL: auto-prepend https:// if missing protocol
+function normalizeUrl(url) {
+  if (!url) return url;
+  url = url.trim();
+  if (!/^https?:\/\//i.test(url)) {
+    return 'https://' + url;
+  }
+  return url;
+}
 
 document.getElementById('api-save').onclick = () => {
   const key = document.getElementById('api-key-input').value.trim();
   const customModelInput = document.getElementById('api-custom-model').value.trim();
   const localUrl = document.getElementById('api-local-url').value.trim();
-  const customUrl = document.getElementById('api-custom-url').value.trim();
+  const customUrl = normalizeUrl(document.getElementById('api-custom-url').value.trim());
+  // Update input to show normalized URL
+  if (customUrl && document.getElementById('api-custom-url').value.trim() !== customUrl) {
+    document.getElementById('api-custom-url').value = customUrl;
+  }
   if (!selectedProviderId) return showApiStatus('请选择服务商', true);
   if (!key) return showApiStatus('请输入 API Key', true);
   const p = PROVIDERS.find(x => x.id === selectedProviderId);
@@ -1126,26 +1282,55 @@ function updateModelDropdown(provider) {
   // 有配置: 只显示该服务商; 无配置: 显示全部
   const providers = p ? [p] : PROVIDERS;
   providers.forEach(prov => {
-  prov.models.forEach(m => {
-    const el = document.createElement('div');
-    el.className = 'model-option' + (m.id === selectedModelId ? ' active' : '');
-    el.innerHTML = `<div class="model-main-row"><span class="model-name">${m.label}</span><span class="model-date">${m.date}</span><span class="model-rating">⭐ ${m.rating}</span><span class="model-price">\$$${m.price}/M</span>${m.id===selectedModelId?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10a37f" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>':''}</div>`;
+  // Check for dynamic models first
+  const dyn = dynamicModels[prov.id] || [];
+  const hasDyn = dyn.length > 0;
+
+  // Built-in models (skip if dynamic models available)
+  if (!hasDyn) {
+    prov.models.forEach(m => {
+      const el = document.createElement('div');
+      el.className = 'model-option' + (m.id === selectedModelId ? ' active' : '');
+      el.innerHTML = `<div class="model-main-row"><span class="model-name">${m.label}</span><span class="model-date">${m.date}</span><span class="model-rating">⭐ ${m.rating}</span><span class="model-price">\$$${m.price}/M</span>${m.id===selectedModelId?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10a37f" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>':''}</div>`;
       el.onclick = () => {
-      selectedModelId = m.id;
-      document.getElementById('model-label').textContent = m.label;
-      dd.querySelectorAll('.model-option').forEach(o => o.classList.remove('active'));
-      el.classList.add('active');
-      dd.classList.remove('open');
-      document.getElementById('model-chevron').style.transform = '';
-      // Switch model via env
-      const sp = PROVIDERS.find(x => x.id === selectedProviderId);
-      if (sp && apiKey) {
-        const base = sp.isCustom ? (customApiUrl || sp.apiBaseUrl) : sp.apiBaseUrl;
-        applyModelEnv(apiKey, base, m.id);
-      }
-    };
-    dd.appendChild(el);
-  });
+        selectedModelId = m.id;
+        document.getElementById('model-label').textContent = m.label;
+        dd.querySelectorAll('.model-option').forEach(o => o.classList.remove('active'));
+        el.classList.add('active');
+        dd.classList.remove('open');
+        document.getElementById('model-chevron').style.transform = '';
+        // Switch model via env
+        const sp = PROVIDERS.find(x => x.id === selectedProviderId);
+        if (sp && apiKey) {
+          const base = sp.isCustom ? (customApiUrl || sp.apiBaseUrl) : sp.apiBaseUrl;
+          applyModelEnv(apiKey, base, m.id);
+        }
+      };
+      dd.appendChild(el);
+    });
+  }
+  // Dynamic models (from API fetch)
+  if (hasDyn) {
+    dyn.forEach(m => {
+      const el = document.createElement('div');
+      el.className = 'model-option' + (m.id === selectedModelId ? ' active' : '');
+      el.innerHTML = `<div class="model-main-row"><span class="model-name">${m.label}</span>${m.id===selectedModelId?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10a37f" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>':''}</div>`;
+      el.onclick = () => {
+        selectedModelId = m.id;
+        document.getElementById('model-label').textContent = m.label;
+        dd.querySelectorAll('.model-option').forEach(o => o.classList.remove('active'));
+        el.classList.add('active');
+        dd.classList.remove('open');
+        document.getElementById('model-chevron').style.transform = '';
+        const sp = PROVIDERS.find(x => x.id === selectedProviderId);
+        if (sp && apiKey) {
+          const base = sp.isCustom ? (customApiUrl || sp.apiBaseUrl) : sp.apiBaseUrl;
+          applyModelEnv(apiKey, base, m.id);
+        }
+      };
+      dd.appendChild(el);
+    });
+  }
   // Custom models for this provider
   const cms = customModels[prov.id] || [];
   cms.forEach(cm => {
@@ -1191,7 +1376,12 @@ function updateSidebarUser(p, modelId, customModelName) {
     if (p.isCustom) {
       document.getElementById('model-label').textContent = customModelName || modelId || '自定义模型';
     } else {
-      document.getElementById('model-label').textContent = customModelName || (p.models.find(x => x.id === modelId)?.label) || p.label;
+      // Try dynamic models first, then built-in models
+      const dyn = dynamicModels[p.id] || [];
+      const modelLabel = dyn.find(x => x.id === modelId)?.label
+        || p.models.find(x => x.id === modelId)?.label
+        || customModelName || p.label;
+      document.getElementById('model-label').textContent = modelLabel;
     }
     dot.style.display = 'block';
     dot.style.background = '#10a37f';
@@ -1215,9 +1405,12 @@ function applyModelEnv(apiKey, baseUrl, model) {
   if (savedConfig) {
     const p = PROVIDERS.find(x => x.id === savedConfig.providerId);
     if (p) {
+      const dyn = dynamicModels[p.id] || [];
       const label = p.isCustom
         ? (savedConfig.customModel || '自定义模型')
-        : (p.models.find(x => x.id === savedConfig.selectedModelId)?.label || savedConfig.customModel || p.label);
+        : (dyn.find(x => x.id === savedConfig.selectedModelId)?.label
+          || p.models.find(x => x.id === savedConfig.selectedModelId)?.label
+          || savedConfig.customModel || p.label);
       document.getElementById('model-label').textContent = label;
       updateSidebarUser(p, savedConfig.selectedModelId, savedConfig.customModel);
       updateModelDropdown(p);
@@ -1228,6 +1421,7 @@ function applyModelEnv(apiKey, baseUrl, model) {
   } else {
     updateModelDropdown();
   }
+  setupApiKeyAutoFetch();
 })();
 
 // ===== 底色切换 =====
