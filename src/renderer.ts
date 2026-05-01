@@ -65,6 +65,10 @@ const term = new Terminal({
     brightBlack:'#5a5a5a',brightRed:'#fca5a5',brightGreen:'#34d399',brightYellow:'#fcd34d',brightBlue:'#93c5fd',brightMagenta:'#d8b4fe',brightCyan:'#67e8f9',brightWhite:'#fff' },
   scrollback: 10000, smoothScrollDuration: 100, scrollSensitivity: 4,
 });
+// 暴露终端配色更新接口，供 index.html 切换主题时调用
+(window as any).updateTerminalColors = (colors: { foreground?: string; background?: string }) => {
+  if (colors.foreground) term.options.theme = { ...term.options.theme, foreground: colors.foreground };
+};
 const fitAddon = new FitAddon();
 term.loadAddon(fitAddon);
 term.open($('terminal'));

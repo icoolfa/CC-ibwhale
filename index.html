@@ -50,6 +50,8 @@
     .theme-dot { width: 18px; height: 18px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: all 0.15s; display: inline-block; }
     .theme-dot:hover { border-color: var(--text-sub); transform: scale(1.2); }
     .theme-dot.active { border-color: var(--accent); }
+    .theme-dot.theme-dot-light { border-color: #555; }
+    .theme-dot.theme-dot-light.active { border-color: var(--accent); }
 
     /* ── Main ── */
     .main { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100%; }
@@ -108,6 +110,7 @@
     .token-model-detail { min-width: 120px; color: var(--text-sub); text-align: right; }
     .token-model-pct { min-width: 36px; color: var(--accent); font-weight: 600; text-align: right; }
     .token-pricing { padding: 10px 0 6px; border-top: 1px solid var(--border); margin-top: 8px; }
+    .token-price-disclaimer { font-size:10px; color:var(--text-sub); opacity:0.7; text-align:center; margin-top:6px; }
     .token-ref-cost { font-size: 11px; color: var(--text-sub); text-align: center; margin-bottom: 8px; }
     .token-ref-cost #tp-ref-cost { color: var(--text); font-weight: 600; }
     .token-ref-model { opacity: 0.7; }
@@ -379,12 +382,18 @@
         </div>
       </div>
       <!-- 底色切换 -->
-      <div style="display:flex;gap:6px;padding:8px 4px 0;justify-content:center;">
+      <div style="display:flex;gap:6px;padding:8px 4px 0;justify-content:center;flex-wrap:wrap;">
         <span class="theme-dot" data-bg="#1a1a1a" style="background:#1a1a1a;" title="深色"></span>
         <span class="theme-dot" data-bg="#2a2a2a" style="background:#2a2a2a;" title="灰色"></span>
         <span class="theme-dot" data-bg="#1e293b" style="background:#1e293b;" title="深蓝"></span>
         <span class="theme-dot" data-bg="#1a2e1a" style="background:#1a2e1a;" title="深绿"></span>
         <span class="theme-dot" data-bg="#2e1a2e" style="background:#2e1a2e;" title="深紫"></span>
+        <span class="theme-dot theme-dot-light" data-bg="#ffffff" style="background:#ffffff;" title="白色"></span>
+        <span class="theme-dot theme-dot-light" data-bg="#fef6ec" style="background:#fef6ec;" title="米黄"></span>
+        <span class="theme-dot theme-dot-light" data-bg="#e6edf5" style="background:#e6edf5;" title="雾蓝"></span>
+        <span class="theme-dot" data-bg="#1d2d2d" style="background:#1d2d2d;" title="深青"></span>
+        <span class="theme-dot" data-bg="#2a2018" style="background:#2a2018;" title="暖棕"></span>
+        <span class="theme-dot" data-bg="#282233" style="background:#282233;" title="暗紫"></span>
       </div>
     </div>
   </nav>
@@ -529,7 +538,7 @@
         THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.</p>
       </div>
       <div style="margin-top:12px;text-align:center;">
-        <a href="#" onclick="event.preventDefault(); window.electronAPI.openUrl('https://ibwhale.com/profile/3720008'); return false;" style="color:var(--accent);text-decoration:none;font-size:13px;">ibwhale.com/profile/3720008</a>
+        <a href="#" onclick="event.preventDefault(); window.electronAPI.openUrl('https://linktoken.ai'); return false;" style="color:var(--accent);text-decoration:none;font-size:13px;">linktoken.ai</a>
         <span style="color:var(--text-sub);margin:0 8px;">|</span>
         <a href="#" onclick="event.preventDefault(); window.electronAPI.openUrl('https://github.com/icoolfa/CC-ibwhale'); return false;" style="color:var(--accent);text-decoration:none;font-size:13px;">GitHub 项目</a>
       </div>
@@ -650,6 +659,7 @@
       <label>输出 ¥<input type="number" id="tp-custom-output-price" step="0.01" min="0" placeholder="0.00"></label>
       <button class="token-custom-reset" onclick="window.recalcCustomCost()">重新计算</button>
     </div>
+    <div class="token-price-disclaimer">价格只是参考，实际扣费以 API 提供方为准</div>
   </div>
   <div class="token-model-list" id="tp-model-list"></div>
 </div>
@@ -1427,13 +1437,18 @@ function applyModelEnv(apiKey, baseUrl, model) {
 // ===== 底色切换 =====
 function applyTheme(bg) {
   document.documentElement.style.setProperty('--bg', bg);
-  // 根据底色调整关联颜色
   const themes = {
-    '#1a1a1a': { sidebar:'#171717', card:'#2a2a2a', input:'#353535', hover:'#333', border:'#333' },
-    '#2a2a2a': { sidebar:'#222222', card:'#353535', input:'#404040', hover:'#3a3a3a', border:'#404040' },
-    '#1e293b': { sidebar:'#172033', card:'#2a3a50', input:'#354560', hover:'#333d50', border:'#333d50' },
-    '#1a2e1a': { sidebar:'#152615', card:'#2a402a', input:'#354a35', hover:'#334a33', border:'#334a33' },
-    '#2e1a2e': { sidebar:'#251525', card:'#402a40', input:'#4a354a', hover:'#4a334a', border:'#4a334a' },
+    '#1a1a1a': { sidebar:'#171717', card:'#2a2a2a', input:'#353535', hover:'#333', border:'#333', text:'#ececf1', textSub:'#8e8ea0' },
+    '#2a2a2a': { sidebar:'#222222', card:'#353535', input:'#404040', hover:'#3a3a3a', border:'#404040', text:'#ececf1', textSub:'#8e8ea0' },
+    '#1e293b': { sidebar:'#172033', card:'#2a3a50', input:'#354560', hover:'#333d50', border:'#333d50', text:'#ececf1', textSub:'#8e8ea0' },
+    '#1a2e1a': { sidebar:'#152615', card:'#2a402a', input:'#354a35', hover:'#334a33', border:'#334a33', text:'#ececf1', textSub:'#8e8ea0' },
+    '#2e1a2e': { sidebar:'#251525', card:'#402a40', input:'#4a354a', hover:'#4a334a', border:'#4a334a', text:'#ececf1', textSub:'#8e8ea0' },
+    '#ffffff': { sidebar:'#f5f5f5', card:'#e8e8e8', input:'#dddddd', hover:'#e0e0e0', border:'#cccccc', text:'#1a1a1a', textSub:'#666666' },
+    '#fef6ec': { sidebar:'#f5e8d8', card:'#fef9f2', input:'#f0e4d0', hover:'#f2e8d8', border:'#d8c8b0', text:'#2d2218', textSub:'#8a7a6a' },
+    '#e6edf5': { sidebar:'#dce4ee', card:'#eef2f7', input:'#d8e0ea', hover:'#e0e6f0', border:'#c0c8d4', text:'#1a2230', textSub:'#6a7484' },
+    '#1d2d2d': { sidebar:'#152222', card:'#2a3d3d', input:'#354a4a', hover:'#2d4040', border:'#354a4a', text:'#d0e0e0', textSub:'#8a9a9a' },
+    '#2a2018': { sidebar:'#1f1710', card:'#3d3028', input:'#4a3d35', hover:'#3a2d22', border:'#4a3d35', text:'#e8dcc8', textSub:'#a09080' },
+    '#282233': { sidebar:'#1f1a2a', card:'#3a3045', input:'#453a52', hover:'#3d3248', border:'#453a52', text:'#d8cce8', textSub:'#9888a8' },
   };
   const t = themes[bg] || themes['#2a2a2a'];
   document.documentElement.style.setProperty('--bg-sidebar', t.sidebar);
@@ -1441,9 +1456,15 @@ function applyTheme(bg) {
   document.documentElement.style.setProperty('--bg-input', t.input);
   document.documentElement.style.setProperty('--bg-hover', t.hover);
   document.documentElement.style.setProperty('--border', t.border);
+  document.documentElement.style.setProperty('--text', t.text);
+  document.documentElement.style.setProperty('--text-sub', t.textSub);
   localStorage.setItem('ibwhale_theme', bg);
   persistConfig();
   document.querySelectorAll('.theme-dot').forEach(d => d.classList.toggle('active', d.dataset.bg === bg));
+  // 同步终端前景色
+  if (window.updateTerminalColors) {
+    window.updateTerminalColors({ foreground: t.text });
+  }
 }
 document.querySelectorAll('.theme-dot').forEach(dot => {
   dot.onclick = () => applyTheme(dot.dataset.bg);
