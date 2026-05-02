@@ -1030,7 +1030,7 @@ ipcMain.handle('fetch-models', async (_event, { baseUrl, apiKey }) => {
           // Ollama format: { models: [{ name: "llama3:latest", ... }] }
           if (json.models && Array.isArray(json.models) && typeof json.models[0] === 'object' && json.models[0].name) {
             models = json.models.map(m => ({
-              id: m.name.replace(/:.+$/, ''),
+              id: m.name,
               label: m.name,
             }));
           }
