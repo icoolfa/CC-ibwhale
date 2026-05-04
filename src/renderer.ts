@@ -7,6 +7,7 @@ import { FitAddon } from '@xterm/addon-fit';
 declare global {
   interface Window {
     electronAPI: {
+      getFilePath(file: File): string;
       sendInput(data: string): void;
       sendResize(cols: number, rows: number): void;
       killProcess(): void;
@@ -82,6 +83,64 @@ new ResizeObserver(doFit).observe($('terminal'));
 term.onData((d: string) => api.sendInput(d));
 term.attachCustomKeyEventHandler(() => true);
 $('terminal').addEventListener('paste', (e: Event) => { const pe = e as ClipboardEvent; const t = pe.clipboardData?.getData('text'); if (t) { pe.preventDefault(); api.sendInput(t); } });
+
+// Drag & drop — global capture on document so xterm.js internal elements
+// (canvas, textarea, etc.) can never block the events. Supports both the
+// terminal area and the command input bar.
+const termWrap = document.querySelector('.term-wrap') as HTMLElement;
+
+document.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  const dt = (e as DragEvent).dataTransfer;
+  if (dt) dt.dropEffect = 'copy';
+  // Visual feedback: highlight the terminal area
+  const t = e.target as HTMLElement;
+  if (termWrap?.contains(t)) {
+    termWrap.classList.add('drag-over');
+  }
+}, true);
+
+document.addEventListener('dragleave', (e) => {
+  const t = e.target as HTMLElement;
+  const rt = (e as DragEvent).relatedTarget as Node | null;
+  if (termWrap?.contains(t) && !termWrap.contains(rt)) {
+    termWrap.classList.remove('drag-over');
+  }
+}, true);
+
+document.addEventListener('drop', (e) => {
+  e.preventDefault();
+  termWrap?.classList.remove('drag-over');
+  const dt = (e as DragEvent).dataTransfer;
+  if (!dt) return;
+
+  let data = '';
+  if (dt.files && dt.files.length > 0) {
+    const parts: string[] = [];
+    for (let i = 0; i < dt.files.length; i++) {
+      const fp = api.getFilePath(dt.files[i]);
+      if (fp) parts.push(fp.includes(' ') ? `"${fp}"` : fp);
+    }
+    data = parts.join(' ');
+  }
+  if (!data) data = dt.getData('text/plain');
+  if (!data) return;
+
+  const t = e.target as HTMLElement;
+  const inputWrap = document.querySelector('.input-wrapper');
+  if (inputWrap?.contains(t)) {
+    // Dropped onto the command input bar — insert into textarea
+    const ta = $('cmd-input') as HTMLTextAreaElement;
+    ta.focus();
+    const s = ta.selectionStart;
+    ta.setRangeText(data, s, ta.selectionEnd, 'end');
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+  } else if (termWrap?.contains(t)) {
+    // Dropped onto the terminal area — send to PTY
+    api.sendInput(data);
+  }
+  // Dropped elsewhere (sidebar, topbar, etc.): silently ignore
+}, true);
 
 // Context menu
 const ctxMenu = $('ctx-menu') as HTMLElement;

@@ -161,7 +161,9 @@
 
     /* ── Terminal ── */
     .term-wrap { flex: 1; position: relative; overflow: hidden; min-height: 0; }
-    #terminal { width: 100%; height: 100%; padding: 8px 16px; }
+    #terminal { width: 100%; height: 100%; padding: 8px 16px; transition: box-shadow 0.2s; }
+	    .term-wrap.drag-over { box-shadow: inset 0 0 0 2px var(--accent); background: rgba(16,163,127,0.04); }
+	    .input-wrapper.drag-over { border-color: var(--accent) !important; box-shadow: 0 0 0 2px var(--accent); }
     #terminal .xterm { height: 100%; }
     #terminal .xterm-viewport { scrollbar-width: thin; scrollbar-color: #444 transparent; }
     #terminal .xterm-viewport::-webkit-scrollbar { width: 5px; }
@@ -1237,7 +1239,7 @@ document.getElementById('api-save').onclick = () => {
   showApiStatus('配置已保存 ✓', false);
   // Apply model env via main process (restarts PTY)
   if (window.electronAPI && window.electronAPI.setModelEnv) {
-    window.electronAPI.setModelEnv({ apiKey: key, baseUrl, model: modelId });
+    window.electronAPI.setModelEnv({ apiKey: key, baseUrl, model: modelId, providerId: selectedProviderId, customApiUrl: customApiUrl || customUrl });
   }
   setTimeout(() => document.getElementById('api-overlay').classList.remove('open'), 800);
 };
@@ -1402,7 +1404,7 @@ function updateSidebarUser(p, modelId, customModelName) {
 // ===== Apply model env (restarts PTY) =====
 function applyModelEnv(apiKey, baseUrl, model) {
   if (window.electronAPI && window.electronAPI.setModelEnv) {
-    window.electronAPI.setModelEnv({ apiKey, baseUrl, model });
+    window.electronAPI.setModelEnv({ apiKey, baseUrl, model, providerId: selectedProviderId, customApiUrl });
   }
 }
 

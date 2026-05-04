@@ -1,9 +1,13 @@
 /**
  * Preload Bridge - 仅暴露 IPC
  */
-const { ipcRenderer } = require('electron');
+const { ipcRenderer, webUtils } = require('electron');
 
 window.electronAPI = {
+  // Get absolute file path from dropped file (Electron >= 28 uses webUtils)
+  getFilePath: (file) => {
+    try { return webUtils.getPathForFile(file); } catch { return file.path || file.name || ''; }
+  },
   sendInput: (data) => ipcRenderer.send('pty-input', data),
   sendResize: (cols, rows) => ipcRenderer.send('pty-resize', { cols, rows }),
   killProcess: () => ipcRenderer.send('pty-kill'),
