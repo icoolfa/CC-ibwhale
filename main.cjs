@@ -699,10 +699,11 @@ ipcMain.handle('auto-update', async () => {
     const extractDir = path.join(tmpDir, 'extracted');
     await extractZip(zipPath, extractDir);
 
-    // 5. 找到解压后的文件夹（通常是 CC-ibwhale-xxx/）
-    const updateDir = fs.readdirSync(extractDir).find(f => fs.statSync(path.join(extractDir, f)).isDirectory());
-    if (!updateDir) return { ok: false, error: '解压后未找到更新目录' };
-    const sourceDir = path.join(extractDir, updateDir);
+    // 5. 找到解压后的源目录：单个顶层目录则深入，否则直接用根目录
+    const entries = fs.readdirSync(extractDir);
+    const dirs = entries.filter(f => fs.statSync(path.join(extractDir, f)).isDirectory());
+    const files = entries.filter(f => fs.statSync(path.join(extractDir, f)).isFile());
+    const sourceDir = (dirs.length === 1 && files.length === 0) ? path.join(extractDir, dirs[0]) : extractDir;
 
     // 6. 复制文件（跳过不需要更新的文件）
     const targetDir = path.join(__dirname);
