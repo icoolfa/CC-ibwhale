@@ -1,11 +1,21 @@
-Dim fso, scriptDir, electronPath
+Dim fso, scriptDir
 Set fso = CreateObject("Scripting.FileSystemObject")
 scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
-electronPath = fso.BuildPath(scriptDir, "node_modules\electron\dist\electron.exe")
 
-Dim WshShell
+Dim WshShell, shortcutPath, lnk, q
+q = Chr(34)
+shortcutPath = fso.BuildPath(scriptDir, "ibwhale.lnk")
 Set WshShell = CreateObject("WScript.Shell")
-WshShell.CurrentDirectory = scriptDir
-WshShell.Run """" & electronPath & """ .", 0, False
+Set lnk = WshShell.CreateShortcut(shortcutPath)
+lnk.TargetPath = q & fso.BuildPath(scriptDir, "ibwhale.vbs") & q
+lnk.WorkingDirectory = scriptDir
+lnk.IconLocation = fso.BuildPath(scriptDir, "img\logo.ico")
+lnk.Description = "ibwhale agent"
+lnk.WindowStyle = 7
+lnk.Save
 
+WshShell.CurrentDirectory = scriptDir
+WshShell.Run "cmd /c npx electron .", 0, False
+
+Set lnk = Nothing
 Set WshShell = Nothing
