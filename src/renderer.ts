@@ -17,6 +17,7 @@ declare global {
       minimize(): void;
       maximize(): void;
       close(): void;
+      tileWindows(): void;
       translate(text: string): Promise<string>;
       // Conversation
       newConv(): Promise<{ id: string; title: string; pid: number | null; ok: boolean }>;
@@ -39,13 +40,14 @@ const $ = (s: string) => document.getElementById(s)!;
 
 // Sidebar
 let sbOpen = true;
-$('sidebar-toggle').onclick = () => { sbOpen = !sbOpen; $('sidebar').classList.toggle('hide', !sbOpen); };
+$('sidebar-toggle').onclick = () => { sbOpen = !sbOpen; $('sidebar').classList.toggle('hide', !sbOpen); api.tileWindows(); };
 
 // Window
 let userKill = false;
 $('btn-min').onclick = () => api.minimize();
 $('btn-max').onclick = () => api.maximize();
 $('btn-close').onclick = () => { userKill = true; api.killProcess(); api.close(); };
+$('btn-tile').onclick = () => api.tileWindows();
 $('btn-kill').onclick = () => { userKill = true; api.killProcess(); setStatus('已终止', false); };
 $('btn-restart').onclick = () => { userKill = false; api.killProcess(); term.reset(); term.clear(); api.spawnProcess(); setStatus('启动中...', true); };
 

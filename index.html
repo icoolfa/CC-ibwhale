@@ -71,6 +71,8 @@
     .win-btn { width: 36px; height: 30px; border: none; background: transparent; color: var(--text-sub); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.1s; }
     .win-btn:hover { background: var(--bg-hover); color: var(--text); }
     .win-btn.close:hover { background: #e81123; color: #fff; }
+    .tile-btn { width: 36px; height: 30px; border: none; background: transparent; color: var(--text-sub); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.1s; border-radius: 4px; }
+    .tile-btn:hover { background: var(--bg-hover); color: var(--text); }
 
     /* ── Token Usage Widget ── */
     .token-widget { display: none; align-items: center; gap: 2px; cursor: pointer; position: relative; -webkit-app-region: no-drag; padding: 4px 6px; border-radius: 8px; transition: background 0.15s; max-width: 220px; overflow: hidden; }
@@ -439,6 +441,9 @@
           </button>
           <div class="plugin-dropdown" id="plugin-dropdown"></div>
         </div>
+        <button class="tile-btn" id="btn-tile" title="平铺窗口">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        </button>
         <div class="win-btns">
           <button class="win-btn" id="btn-min"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
           <button class="win-btn" id="btn-max"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></button>

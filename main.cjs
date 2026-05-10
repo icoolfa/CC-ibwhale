@@ -438,6 +438,51 @@ function spawnNewWindow() {
   });
 }
 
+/**
+ * 平铺所有窗口 - 按网格布局自动排列
+ */
+function tileAllWindows() {
+  const wins = [];
+  for (const [win] of windowMap) {
+    if (!win.isDestroyed()) wins.push(win);
+  }
+  if (wins.length === 0) return;
+
+  const GAP = 4;
+  const display = screen.getPrimaryDisplay();
+  const { x: waX, y: waY, width: waW, height: waH } = display.workArea;
+
+  const n = wins.length;
+
+  // Determine grid dimensions (reference: PowerToys FancyZones, Rectangle, i3)
+  let cols, rows;
+  if (n === 1) { cols = 1; rows = 1; }
+  else if (n === 2) { cols = 2; rows = 1; }
+  else if (n === 3) { cols = 3; rows = 1; }
+  else if (n === 4) { cols = 2; rows = 2; }
+  else if (n === 5) { cols = 3; rows = 2; }       // row0: 3, row1: 2 centered
+  else if (n === 6) { cols = 3; rows = 2; }       // 3×2
+  else if (n === 7) { cols = 4; rows = 2; }       // row0: 4, row1: 3 centered
+  else { cols = Math.ceil(Math.sqrt(n)); rows = Math.ceil(n / cols); } // 8+ generic
+
+  const cellW = Math.floor((waW - (cols + 1) * GAP) / cols);
+  const cellH = Math.floor((waH - (rows + 1) * GAP) / rows);
+
+  for (let i = 0; i < n; i++) {
+    const r = Math.floor(i / cols);
+    const c = i % cols;
+
+    // For rows with fewer cells than cols, center them
+    const cellsInThisRow = (r === rows - 1 && n % cols !== 0) ? (n % cols) : cols;
+    const rowOffset = Math.floor((cols - cellsInThisRow) * (cellW + GAP) / 2);
+
+    const wx = waX + GAP + c * (cellW + GAP) + (r === rows - 1 ? rowOffset : 0);
+    const wy = waY + GAP + r * (cellH + GAP);
+
+    wins[i].setBounds({ x: wx, y: wy, width: cellW, height: cellH });
+  }
+}
+
 // ===== IPC: PTY =====
 ipcMain.on('pty-input', (event, data) => {
   const { info } = getWindowInfo(event);
@@ -1082,6 +1127,10 @@ ipcMain.on('pty-spawn', (event) => {
 
 ipcMain.on('open-new-window', () => {
   spawnNewWindow();
+});
+
+ipcMain.on('tile-windows', () => {
+  tileAllWindows();
 });
 
 ipcMain.on('window-minimize', (event) => {

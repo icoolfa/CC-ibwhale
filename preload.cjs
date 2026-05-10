@@ -54,6 +54,7 @@ window.electronAPI = {
     return () => ipcRenderer.removeListener('update-progress', h);
   },
   openNewWindow: () => ipcRenderer.send('open-new-window'),
+  tileWindows: () => ipcRenderer.send('tile-windows'),
   toggleWhip: () => ipcRenderer.send('toggle-whip'),
   getTokenUsage: (filter) => ipcRenderer.invoke('get-token-usage', filter || {}),
   fetchModels: (cfg) => ipcRenderer.invoke('fetch-models', cfg),

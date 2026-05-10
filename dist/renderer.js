@@ -9143,6 +9143,7 @@ var sbOpen = true;
 $2("sidebar-toggle").onclick = () => {
   sbOpen = !sbOpen;
   $2("sidebar").classList.toggle("hide", !sbOpen);
+  api.tileWindows();
 };
 var userKill = false;
 $2("btn-min").onclick = () => api.minimize();
@@ -9152,6 +9153,7 @@ $2("btn-close").onclick = () => {
   api.killProcess();
   api.close();
 };
+$2("btn-tile").onclick = () => api.tileWindows();
 $2("btn-kill").onclick = () => {
   userKill = true;
   api.killProcess();
