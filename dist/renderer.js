@@ -1,4 +1,4 @@
-// ../node_modules/@xterm/xterm/lib/xterm.mjs
+// node_modules/@xterm/xterm/lib/xterm.mjs
 var zs = Object.defineProperty;
 var Rl = Object.getOwnPropertyDescriptor;
 var Ll = (s15, t) => {
@@ -1252,7 +1252,7 @@ var $;
     };
   }
   Qe.chain = A;
-  let R = /* @__PURE__ */ Symbol("HaltChainable");
+  let R = Symbol("HaltChainable");
   class O {
     constructor() {
       this.steps = [];
@@ -1988,6 +1988,7 @@ var ts = class {
     this._emitter && (this._emitter.dispose(), this._emitter = null);
   }
 };
+var _a = Symbol("MicrotaskDelay");
 var Ye = class {
   constructor(t, e) {
     this._isDisposed = false;
@@ -9112,7 +9113,7 @@ var Dl = class extends D {
   }
 };
 
-// ../node_modules/@xterm/addon-fit/lib/addon-fit.mjs
+// node_modules/@xterm/addon-fit/lib/addon-fit.mjs
 var h = 2;
 var _ = 1;
 var o = class {
@@ -9139,6 +9140,13 @@ var o = class {
 // src/renderer.ts
 var api = window.electronAPI;
 var $2 = (s15) => document.getElementById(s15);
+var MAX_INPUT_CHARS = 1e6;
+function guardInput(data) {
+  if (data.length > MAX_INPUT_CHARS) {
+    return data.slice(data.length - MAX_INPUT_CHARS);
+  }
+  return data;
+}
 var sbOpen = true;
 $2("sidebar-toggle").onclick = () => {
   sbOpen = !sbOpen;
@@ -9178,7 +9186,7 @@ cmdInput.onkeydown = (e) => {
 cmdInput.oninput = () => $2("cmd-send").classList.toggle("on", cmdInput.value.length > 0);
 function sendCmd() {
   if (!cmdInput.value) return;
-  api.sendInput(cmdInput.value + "\r");
+  api.sendInput(guardInput(cmdInput.value + "\r"));
   cmdInput.value = "";
   cmdInput.focus();
 }
@@ -9237,14 +9245,14 @@ var doFit = () => {
 };
 window.addEventListener("resize", doFit);
 new ResizeObserver(doFit).observe($2("terminal"));
-term.onData((d) => api.sendInput(d));
+term.onData((d) => api.sendInput(guardInput(d)));
 term.attachCustomKeyEventHandler(() => true);
 $2("terminal").addEventListener("paste", (e) => {
   const pe2 = e;
   const t = pe2.clipboardData?.getData("text");
   if (t) {
     pe2.preventDefault();
-    api.sendInput(t);
+    api.sendInput(guardInput(t));
   }
 });
 var termWrap = document.querySelector(".term-wrap");
@@ -9289,7 +9297,7 @@ document.addEventListener("drop", (e) => {
     ta2.setRangeText(data, s15, ta2.selectionEnd, "end");
     ta2.dispatchEvent(new Event("input", { bubbles: true }));
   } else if (termWrap?.contains(t)) {
-    api.sendInput(data);
+    api.sendInput(guardInput(data));
   }
 }, true);
 var ctxMenu = $2("ctx-menu");
@@ -9312,7 +9320,7 @@ $2("ctx-copy").onclick = () => {
 $2("ctx-paste").onclick = async () => {
   try {
     const t = await navigator.clipboard.readText();
-    if (t) api.sendInput(t);
+    if (t) api.sendInput(guardInput(t));
   } catch {
   }
   ctxMenu.style.display = "none";

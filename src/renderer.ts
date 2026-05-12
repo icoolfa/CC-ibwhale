@@ -38,6 +38,15 @@ declare global {
 const api = window.electronAPI;
 const $ = (s: string) => document.getElementById(s)!;
 
+// 与 Claude Code 200K tokens 上下文对齐（按最保守 ~2 chars/token 估算）
+const MAX_INPUT_CHARS = 400000;
+function guardInput(data: string): string {
+  if (data.length > MAX_INPUT_CHARS) {
+    return data.slice(data.length - MAX_INPUT_CHARS);
+  }
+  return data;
+}
+
 // Sidebar
 let sbOpen = true;
 $('sidebar-toggle').onclick = () => { sbOpen = !sbOpen; $('sidebar').classList.toggle('hide', !sbOpen); api.tileWindows(); };
@@ -56,7 +65,7 @@ const cmdInput = $('cmd-input') as HTMLInputElement;
 $('cmd-send').onclick = sendCmd;
 cmdInput.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); sendCmd(); } };
 cmdInput.oninput = () => $('cmd-send').classList.toggle('on', cmdInput.value.length > 0);
-function sendCmd() { if (!cmdInput.value) return; api.sendInput(cmdInput.value + '\r'); cmdInput.value = ''; cmdInput.focus(); }
+function sendCmd() { if (!cmdInput.value) return; api.sendInput(guardInput(cmdInput.value + '\r')); cmdInput.value = ''; cmdInput.focus(); }
 
 // Terminal
 const term = new Terminal({
@@ -82,9 +91,9 @@ window.addEventListener('resize', doFit);
 new ResizeObserver(doFit).observe($('terminal'));
 
 // Keyboard
-term.onData((d: string) => api.sendInput(d));
+term.onData((d: string) => api.sendInput(guardInput(d)));
 term.attachCustomKeyEventHandler(() => true);
-$('terminal').addEventListener('paste', (e: Event) => { const pe = e as ClipboardEvent; const t = pe.clipboardData?.getData('text'); if (t) { pe.preventDefault(); api.sendInput(t); } });
+$('terminal').addEventListener('paste', (e: Event) => { const pe = e as ClipboardEvent; const t = pe.clipboardData?.getData('text'); if (t) { pe.preventDefault(); api.sendInput(guardInput(t)); } });
 
 // Drag & drop — global capture on document so xterm.js internal elements
 // (canvas, textarea, etc.) can never block the events. Supports both the
@@ -139,7 +148,7 @@ document.addEventListener('drop', (e) => {
     ta.dispatchEvent(new Event('input', { bubbles: true }));
   } else if (termWrap?.contains(t)) {
     // Dropped onto the terminal area — send to PTY
-    api.sendInput(data);
+    api.sendInput(guardInput(data));
   }
   // Dropped elsewhere (sidebar, topbar, etc.): silently ignore
 }, true);
@@ -154,7 +163,7 @@ $('terminal').addEventListener('contextmenu', (e: MouseEvent) => {
 });
 document.addEventListener('click', () => ctxMenu.style.display = 'none');
 $('ctx-copy').onclick = () => { const s = term.getSelection(); if (s) navigator.clipboard.writeText(s); ctxMenu.style.display = 'none'; };
-$('ctx-paste').onclick = async () => { try { const t = await navigator.clipboard.readText(); if (t) api.sendInput(t); } catch {} ctxMenu.style.display = 'none'; };
+$('ctx-paste').onclick = async () => { try { const t = await navigator.clipboard.readText(); if (t) api.sendInput(guardInput(t)); } catch {} ctxMenu.style.display = 'none'; };
 $('ctx-select-all').onclick = () => { term.selectAll(); ctxMenu.style.display = 'none'; };
 $('ctx-clear').onclick = () => { term.clear(); ctxMenu.style.display = 'none'; };
 

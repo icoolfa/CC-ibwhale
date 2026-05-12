@@ -484,10 +484,26 @@ function tileAllWindows() {
 }
 
 // ===== IPC: PTY =====
+const PTY_CHUNK_SIZE = 4096; // 4KB per chunk, safe for all PTY implementations
+const PTY_CHUNK_DELAY_MS = 5; // 5ms delay between chunks
+
 ipcMain.on('pty-input', (event, data) => {
   const { info } = getWindowInfo(event);
   const conv = info ? conversations.get(info.activeConvId) : null;
-  if (conv && conv.ptyProcess) conv.ptyProcess.write(data);
+  if (!conv || !conv.ptyProcess) return;
+  if (data.length <= PTY_CHUNK_SIZE) {
+    conv.ptyProcess.write(data);
+  } else {
+    let offset = 0;
+    const writeNext = () => {
+      if (offset >= data.length) return;
+      const chunk = data.slice(offset, offset + PTY_CHUNK_SIZE);
+      conv.ptyProcess.write(chunk);
+      offset += PTY_CHUNK_SIZE;
+      setTimeout(writeNext, PTY_CHUNK_DELAY_MS);
+    };
+    writeNext();
+  }
 });
 
 ipcMain.on('pty-resize', (event, { cols, rows }) => {
