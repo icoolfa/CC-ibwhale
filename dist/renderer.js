@@ -9140,7 +9140,7 @@ var o = class {
 // src/renderer.ts
 var api = window.electronAPI;
 var $2 = (s15) => document.getElementById(s15);
-var MAX_INPUT_CHARS = 1e6;
+var MAX_INPUT_CHARS = 4e5;
 function guardInput(data) {
   if (data.length > MAX_INPUT_CHARS) {
     return data.slice(data.length - MAX_INPUT_CHARS);
@@ -9189,6 +9189,28 @@ function sendCmd() {
   api.sendInput(guardInput(cmdInput.value + "\r"));
   cmdInput.value = "";
   cmdInput.focus();
+}
+{
+  const handle = $2("input-resize-handle");
+  const textarea = cmdInput;
+  let dragging = false;
+  let startY = 0;
+  let startHeight = 0;
+  handle.addEventListener("mousedown", (e) => {
+    dragging = true;
+    startY = e.clientY;
+    startHeight = textarea.clientHeight;
+    e.preventDefault();
+  });
+  document.addEventListener("mousemove", (e) => {
+    if (!dragging) return;
+    const dy = startY - e.clientY;
+    const newH = Math.max(60, Math.min(300, startHeight + dy));
+    textarea.style.height = newH + "px";
+  });
+  document.addEventListener("mouseup", () => {
+    dragging = false;
+  });
 }
 var term = new Dl({
   fontFamily: '"SimHei","Microsoft YaHei","Cascadia Code","JetBrains Mono","Fira Code",Consolas,monospace',
@@ -9362,8 +9384,61 @@ trBtn.onclick = async () => {
     $2("tp-result").textContent = "\u7FFB\u8BD1\u5931\u8D25: " + (e?.message || e || "");
   }
 };
+var MODES = ["manual", "autoAccept", "plan", "bypass"];
+var currentModeIndex = 0;
+var modeConfig = {
+  manual: { label: "\u624B\u52A8\u6A21\u5F0F", symbol: "", cssClass: "mode-default", desc: "\u9010\u9879\u786E\u8BA4\u3002\u4EFB\u4F55\u654F\u611F\u64CD\u4F5C\u90FD\u9700\u8981\u7528\u6237\u786E\u8BA4\u3002\u65E5\u5E38\u5F00\u53D1\u63A8\u8350\u3002" },
+  autoAccept: { label: "\u63A5\u53D7\u6A21\u5F0F", symbol: "\u23F5\u23F5", cssClass: "mode-acceptEdits", desc: "\u81EA\u52A8\u6267\u884C\u3002\u8DF3\u8FC7\u6587\u4EF6\u4FEE\u6539\u7684\u786E\u8BA4\u6B65\u9AA4\uFF08Shell\u547D\u4EE4\u4ECD\u9700\u786E\u8BA4\uFF09\u3002" },
+  plan: { label: "\u8BA1\u5212\u6A21\u5F0F", symbol: "\u23F8", cssClass: "mode-plan", desc: "\u53EA\u8BFB\u5206\u6790\uFF0C\u4E0D\u4FEE\u6539\u4EFB\u4F55\u6587\u4EF6\u6216\u6267\u884C\u547D\u4EE4\uFF0C\u4EC5\u751F\u6210\u65B9\u6848\u7B49\u5F85\u5BA1\u6279\u3002" },
+  bypass: { label: "\u9AD8\u6743\u9650\u6A21\u5F0F", symbol: "\u23F5\u23F5", cssClass: "mode-bypass", desc: "\u5B8C\u5168\u653E\u884C\u3002\u8DF3\u8FC7\u6240\u6709\u6743\u9650\u68C0\u67E5\u3002\u4EC5\u9650\u9694\u79BB\u73AF\u5883\u4F7F\u7528\u3002" }
+};
+var modeBtn = $2("btn-mode");
+var modeSymbol = modeBtn.querySelector(".mode-symbol");
+var modeLabel = modeBtn.querySelector(".mode-label");
+function updateModeButton() {
+  const cfg = modeConfig[MODES[currentModeIndex]];
+  modeSymbol.textContent = cfg.symbol;
+  modeLabel.textContent = cfg.label;
+  modeBtn.className = `mode-btn ${cfg.cssClass}`;
+  modeBtn.title = cfg.desc;
+  modeSymbol.style.display = cfg.symbol ? "" : "none";
+}
+function cycleModeForward() {
+  api.sendInput("\x1B[Z");
+  currentModeIndex = (currentModeIndex + 1) % MODES.length;
+  updateModeButton();
+  initialSyncDone = true;
+}
+var initialSyncDone = false;
+var initBuffer = "";
+function tryInitSync(d) {
+  if (initialSyncDone) return;
+  initBuffer += d;
+  if (initBuffer.length > 8e3) initBuffer = initBuffer.slice(-4e3);
+  const clean = initBuffer.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
+  const matches = [...clean.matchAll(/(plan mode|accept edits|bypass permissions) on/gi)];
+  if (matches.length > 0) {
+    const text = matches[matches.length - 1][1].toLowerCase();
+    if (text.includes("plan")) currentModeIndex = 2;
+    else if (text.includes("accept")) currentModeIndex = 1;
+    else if (text.includes("bypass")) currentModeIndex = 3;
+    updateModeButton();
+    initialSyncDone = true;
+  }
+}
+setTimeout(() => {
+  if (!initialSyncDone) {
+    updateModeButton();
+    initialSyncDone = true;
+  }
+}, 2e3);
+modeBtn.onclick = (e) => {
+  e.stopPropagation();
+  cycleModeForward();
+};
 var rm1 = api.onOutput((d) => {
   setStatus("\u8FD0\u884C\u4E2D", true);
+  tryInitSync(d);
   term.write(d);
 });
 var rm2 = api.onExit((code) => {

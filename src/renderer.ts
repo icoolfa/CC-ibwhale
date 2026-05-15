@@ -67,6 +67,33 @@ cmdInput.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); sendC
 cmdInput.oninput = () => $('cmd-send').classList.toggle('on', cmdInput.value.length > 0);
 function sendCmd() { if (!cmdInput.value) return; api.sendInput(guardInput(cmdInput.value + '\r')); cmdInput.value = ''; cmdInput.focus(); }
 
+// Input resize handle — top-right corner, drag up=taller, down=shorter
+{
+  const handle = $('input-resize-handle');
+  const textarea = cmdInput as HTMLTextAreaElement;
+  let dragging = false;
+  let startY = 0;
+  let startHeight = 0;
+
+  handle.addEventListener('mousedown', (e: Event) => {
+    dragging = true;
+    startY = (e as MouseEvent).clientY;
+    startHeight = textarea.clientHeight;
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e: MouseEvent) => {
+    if (!dragging) return;
+    const dy = startY - e.clientY;
+    const newH = Math.max(60, Math.min(300, startHeight + dy));
+    textarea.style.height = newH + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    dragging = false;
+  });
+}
+
 // Terminal
 const term = new Terminal({
   fontFamily: '"SimHei","Microsoft YaHei","Cascadia Code","JetBrains Mono","Fira Code",Consolas,monospace',
@@ -199,8 +226,74 @@ trBtn.onclick = async () => {
 };
 
 // IPC — 纯净终端直通，不拦截不修改
+
+// Mode switching — \x1b[Z (Shift+Tab) cycles forward: manual → autoAccept → plan → bypass
+const MODES = ['manual', 'autoAccept', 'plan', 'bypass'] as const;
+type ModeName = typeof MODES[number];
+let currentModeIndex = 0; // 0=manual, 1=autoAccept, 2=plan, 3=bypass
+
+const modeConfig: Record<ModeName, { label: string; symbol: string; cssClass: string; desc: string }> = {
+  manual:     { label: '手动模式',   symbol: '',         cssClass: 'mode-default',    desc: '逐项确认。任何敏感操作都需要用户确认。日常开发推荐。' },
+  autoAccept: { label: '接受模式', symbol: '\u23F5\u23F5', cssClass: 'mode-acceptEdits',  desc: '自动执行。跳过文件修改的确认步骤（Shell命令仍需确认）。' },
+  plan:       { label: '计划模式',   symbol: '\u23F8',    cssClass: 'mode-plan',       desc: '只读分析，不修改任何文件或执行命令，仅生成方案等待审批。' },
+  bypass:     { label: '高权限模式',   symbol: '\u23F5\u23F5', cssClass: 'mode-bypass',     desc: '完全放行。跳过所有权限检查。仅限隔离环境使用。' },
+};
+
+const modeBtn = $('btn-mode') as HTMLElement;
+const modeSymbol = modeBtn.querySelector('.mode-symbol') as HTMLElement;
+const modeLabel = modeBtn.querySelector('.mode-label') as HTMLElement;
+
+function updateModeButton() {
+  const cfg = modeConfig[MODES[currentModeIndex]];
+  modeSymbol.textContent = cfg.symbol;
+  modeLabel.textContent = cfg.label;
+  modeBtn.className = `mode-btn ${cfg.cssClass}`;
+  modeBtn.title = cfg.desc;
+  modeSymbol.style.display = cfg.symbol ? '' : 'none';
+}
+
+function cycleModeForward() {
+  api.sendInput('\x1b[Z');
+  currentModeIndex = (currentModeIndex + 1) % MODES.length;
+  updateModeButton();
+  initialSyncDone = true;
+}
+
+// 启动时从终端输出检测当前模式
+let initialSyncDone = false;
+let initBuffer = '';
+function tryInitSync(d: string) {
+  if (initialSyncDone) return;
+  initBuffer += d;
+  if (initBuffer.length > 8000) initBuffer = initBuffer.slice(-4000);
+  // 剥掉 ANSI 转义码后再匹配
+  const clean = initBuffer.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
+  const matches = [...clean.matchAll(/(plan mode|accept edits|bypass permissions) on/gi)];
+  if (matches.length > 0) {
+    const text = matches[matches.length - 1][1].toLowerCase();
+    if (text.includes('plan')) currentModeIndex = 2;
+    else if (text.includes('accept')) currentModeIndex = 1;
+    else if (text.includes('bypass')) currentModeIndex = 3;
+    updateModeButton();
+    initialSyncDone = true;
+  }
+}
+// 2秒后还没检测到模式文字，说明当前是手动模式
+setTimeout(() => {
+  if (!initialSyncDone) {
+    updateModeButton();
+    initialSyncDone = true;
+  }
+}, 2000);
+
+modeBtn.onclick = (e) => {
+  e.stopPropagation();
+  cycleModeForward();
+};
+
 const rm1 = api.onOutput((d: string) => {
   setStatus('运行中', true);
+  tryInitSync(d);
   term.write(d);
 });
 const rm2 = api.onExit((code: number) => {

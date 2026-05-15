@@ -66,6 +66,15 @@
     .menu-btn .badge { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); font-size: 0; }
     .topbar-brand { font-size: 15px; font-weight: 600; }
     .topbar-status { font-size: 12px; color: var(--accent); animation: pulse 1.5s infinite; }
+    /* ── Mode Switcher ── */
+    .mode-switcher { position: relative; }
+    .mode-btn { display: flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); font-size: 12px; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+    .mode-btn:hover { background: var(--bg-input); }
+    .mode-btn .mode-symbol { font-size: 12px; line-height: 1; }
+    .mode-btn.mode-default { color: var(--text-sub); }
+    .mode-btn.mode-acceptEdits { color: #38bdf8; border-color: rgba(56,189,248,0.3); } /* 接受模式 */
+    .mode-btn.mode-plan { color: #0b7285; border-color: rgba(11,114,133,0.3); }        /* 计划模式 */
+    .mode-btn.mode-bypass { color: #f87171; border-color: rgba(248,113,113,0.35); }     /* 高权限模式 */
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
     .win-btns { display: flex; gap: 2px; }
     .win-btn { width: 36px; height: 30px; border: none; background: transparent; color: var(--text-sub); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.1s; }
@@ -181,10 +190,13 @@
 
     /* ── Input bar ── */
     .input-bar { padding: 12px 20px 16px; flex-shrink: 0; }
-    .input-wrapper { max-width: 780px; margin: 0 auto; display: flex; align-items: flex-end; gap: 8px; border: 1px solid var(--border); border-radius: 16px; padding: 8px 12px; background: var(--bg-card); transition: border-color 0.2s; }
+    .input-wrapper { max-width: 780px; margin: 0 auto; display: flex; align-items: flex-end; gap: 8px; border: 1px solid var(--border); border-radius: 16px; padding: 8px 12px; background: var(--bg-card); transition: border-color 0.2s; position: relative; }
     .input-wrapper:focus-within { border-color: var(--accent); }
-    .input-wrapper textarea { flex: 1; border: none; background: transparent; color: var(--text); font-size: 15px; outline: none; padding: 4px; resize: none; min-height: 24px; max-height: 200px; line-height: 1.5; font-family: inherit; overflow-y: auto; }
+    .input-wrapper textarea { flex: 1; border: none; background: transparent; color: var(--text); font-size: 15px; outline: none; padding: 4px; resize: none; min-height: 60px; max-height: 300px; line-height: 1.5; font-family: inherit; overflow-y: auto; }
     .input-wrapper textarea::placeholder { color: #5a5a6e; }
+    .input-resize-handle { position: absolute; top: 2px; right: 48px; width: 20px; height: 14px; cursor: ns-resize; display: flex; align-items: center; justify-content: center; border-radius: 3px; opacity: 0.3; transition: opacity 0.15s; }
+    .input-resize-handle:hover, .input-resize-handle:active { opacity: 0.7; }
+    .input-resize-handle::after { content: '▼'; font-size: 10px; color: var(--text-sub); line-height: 1; }
     .send-btn { width: 36px; height: 36px; border-radius: 50%; border: none; background: var(--bg-input); color: var(--text-sub); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; flex-shrink: 0; }
     .send-btn.on { background: var(--accent); color: #fff; }
     .input-hint { text-align: center; font-size: 12px; color: var(--text-sub); margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 8px; }
@@ -420,6 +432,11 @@
         </div>
       </div>
       <div class="topbar-right">
+        <div class="mode-switcher">
+          <button class="mode-btn mode-default" id="btn-mode" title="切换模式">
+            <span class="mode-symbol"></span><span class="mode-label">手动模式</span>
+          </button>
+        </div>
         <span class="topbar-status" id="status-text" style="display:none;"></span>
         <!-- Token Usage Widget -->
         <span class="token-widget" id="token-display" title="点击查看 Token 用量详情">
@@ -465,6 +482,7 @@
 
     <footer class="input-bar">
       <div class="input-wrapper">
+        <span class="input-resize-handle" id="input-resize-handle" title="拖拽调整输入框高度"></span>
         <textarea id="cmd-input" placeholder="输入命令... (Enter 发送，Shift+Enter 换行)" autocomplete="off" rows="1"></textarea>
         <button class="send-btn" id="cmd-send">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
