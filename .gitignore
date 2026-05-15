@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+package-lock.json
 
 # Build output
 dist/
@@ -16,8 +17,11 @@ error.log
 
 # Windows
 Thumbs.db
+*.lnk
 
 # OS
 .DS_Store
 badclaude/node_modules/
-badclaude/node_modules/
+
+# Release archives
+*.zip
