@@ -186,8 +186,828 @@ function getWindowInfo(event) {
   return { win, info };
 }
 
-// { id: string, title: string, ptyProcess: object }
+// { id: string, title: string, ptyProcess: object, agentType: string }
 const conversations = new Map();
+
+// ===== Hermes Auth 凭据池清理 =====
+function clearHermesCredentialPool() {
+  try {
+    const hermesDir = path.join(os.homedir(), '.hermes');
+    const authFile = path.join(hermesDir, 'auth.json');
+    if (fs.existsSync(authFile)) {
+      const auth = JSON.parse(fs.readFileSync(authFile, 'utf-8'));
+      if (auth.credential_pool) {
+        auth.credential_pool = {};
+        fs.writeFileSync(authFile, JSON.stringify(auth, null, 2), 'utf-8');
+        console.log('[ibwhale] Hermes auth.json credential_pool 已清除');
+      }
+    }
+  } catch (err) {
+    console.error('[ibwhale] 清除 Hermes 凭据池失败:', err.message);
+  }
+}
+
+// ===== Hermes 配置文件写入 =====
+// Hermes CLI 从 config.yaml 读取 providers/model 配置。
+// providers.<name> 定义自定义端点，model.provider 引用它。
+// 同时写入 .env 作为后备（供 agent 内部 env var 读取路径使用）。
+function writeHermesConfig(apiKey, baseUrl, model) {
+  try {
+    const hermesDir = path.join(os.homedir(), '.hermes');
+    if (!fs.existsSync(hermesDir)) fs.mkdirSync(hermesDir, { recursive: true });
+
+    // 确保 URL 以 /v1 结尾（Hermes 使用 OpenAI 兼容端点）
+    let url = baseUrl || '';
+    url = url.replace(/\/anthropic$/, '').replace(/\/apps\/anthropic$/, '');
+    if (url && !url.endsWith('/v1')) url += '/v1';
+
+    const configFile = path.join(hermesDir, 'config.yaml');
+
+    // 读取已有配置，替换 providers 和 model section
+    let preservedSections = '';
+    if (fs.existsSync(configFile)) {
+      try {
+        const content = fs.readFileSync(configFile, 'utf-8');
+        const lines = content.split('\n');
+        const kept = [];
+        let inProviders = false;
+        let inModel = false;
+        for (const line of lines) {
+          if (/^providers\s*:/.test(line)) { inProviders = true; continue; }
+          if (/^model\s*:/.test(line)) { inModel = true; continue; }
+          if (inProviders && /^[a-z]/i.test(line) && !/^\s/.test(line)) { inProviders = false; }
+          if (inModel && /^[a-z]/i.test(line) && !/^\s/.test(line)) { inModel = false; }
+          if (!inProviders && !inModel) kept.push(line);
+        }
+        preservedSections = kept.join('\n').trim();
+      } catch {}
+    }
+
+    const providerName = 'ibwhale';
+    const modelName = model || 'claude-sonnet-4-6';
+
+    const providersSection = [
+      'providers:',
+      `  ${providerName}:`,
+      `    name: ibwhale`,
+      `    base_url: ${url}`,
+      `    api_key: ${apiKey || ''}`,
+      `    default_model: ${modelName}`,
+    ].join('\n');
+
+    const modelSection = [
+      'model:',
+      `  provider: ${providerName}`,
+      `  default: ${modelName}`,
+    ].join('\n');
+
+    let yaml;
+    if (preservedSections) {
+      if (!/^version\s*:/m.test(preservedSections)) {
+        yaml = 'version: 23\n' + preservedSections + '\n' + providersSection + '\n' + modelSection;
+      } else {
+        yaml = preservedSections + '\n' + providersSection + '\n' + modelSection;
+      }
+    } else {
+      yaml = 'version: 23\n' + providersSection + '\n' + modelSection;
+    }
+
+    fs.writeFileSync(configFile, yaml, 'utf-8');
+
+    // 同时写入 .env 作为后备（Hermes 的 env var fallback 路径会读取这些）
+    const envFile = path.join(hermesDir, '.env');
+    fs.writeFileSync(envFile, [
+      `HERMES_API_KEY=${apiKey || ''}`,
+      `HERMES_API_BASE=${url}`,
+      `HERMES_DEFAULT_MODEL=${modelName}`,
+      `DEEPSEEK_API_KEY=${apiKey || ''}`,
+      `DEEPSEEK_BASE_URL=${url}`,
+      `OPENAI_API_KEY=${apiKey || ''}`,
+      `OPENAI_BASE_URL=${url}`,
+      '',
+    ].join('\n'), 'utf-8');
+
+    console.log('[ibwhale] Hermes config.yaml 已更新 (provider: ibwhale)');
+  } catch (err) {
+    console.error('[ibwhale] 写入 Hermes 配置失败:', err.message);
+  }
+}
+
+// ===== Codex CLI 配置文件写入 =====
+// Codex CLI 0.128.0+: TOML 格式，root keys (model, model_provider) 必须在所有 [section] 之前
+function writeCodexConfig(apiKey, baseUrl, model) {
+  try {
+    const codexDir = path.join(os.homedir(), '.codex');
+    if (!fs.existsSync(codexDir)) fs.mkdirSync(codexDir, { recursive: true });
+
+    // Codex 0.128.0+ 强制 wire_api="responses"，通过本地代理翻译协议
+    // base_url 指向内置代理，代理会将 /v1/responses 翻译为 /v1/chat/completions
+    const localProxyUrl = 'http://127.0.0.1:' + CODEX_PROXY_PORT + '/v1';
+
+    const configFile = path.join(codexDir, 'config.toml');
+    const modelName = model || 'claude-sonnet-4-6';
+
+    // 读取已有配置，保留所有 [section] 块（projects, windows, tui, marketplaces 等）
+    // 同时移除旧的 model_provider 相关内容
+    let preservedSections = '';
+    if (fs.existsSync(configFile)) {
+      try {
+        const content = fs.readFileSync(configFile, 'utf-8');
+        const lines = content.split('\n');
+        const kept = [];
+        let inProviders = false;
+        for (const line of lines) {
+          // 跳过旧的 [model_providers.*] section 及其内容
+          if (/^\[model_providers/.test(line)) { inProviders = true; continue; }
+          if (inProviders && /^\[/.test(line)) { inProviders = false; }
+          // 跳过旧的 root keys（会重新生成）
+          if (!inProviders && /^model\s*=/.test(line)) continue;
+          if (!inProviders && /^model_provider\s*=/.test(line)) continue;
+          if (!inProviders) kept.push(line);
+        }
+        // 去掉开头和结尾的空行
+        preservedSections = kept.join('\n').replace(/^\n+/, '').replace(/\n+$/, '');
+      } catch {}
+    }
+
+    // ===== 构建新配置：root keys 必须在所有 [section] 之前 =====
+    const rootKeys = [
+      `model = "${modelName}"`,
+      'model_provider = "ibwhale"',
+    ].join('\n');
+
+    const providerSection = [
+      '[model_providers.ibwhale]',
+      'name = "ibwhale"',
+      `base_url = "${localProxyUrl}"`,
+      'env_key = "OPENAI_API_KEY"',
+      'wire_api = "responses"',
+    ].join('\n');
+
+    const parts = [rootKeys, '', providerSection];
+    if (preservedSections) parts.push('', preservedSections);
+
+    const toml = parts.join('\n') + '\n';
+
+    fs.writeFileSync(configFile, toml, 'utf-8');
+
+    console.log('[ibwhale] Codex config.toml 已更新 (model=' + modelName + ', proxy=' + localProxyUrl + ')');
+  } catch (err) {
+    console.error('[ibwhale] 写入 Codex 配置失败:', err.message);
+  }
+}
+
+// ===== Codex CLI Responses → Chat Completions 协议代理 =====
+// Codex 0.128.0+ 强制 wire_api="responses"，但第三方中转站只支持 /v1/chat/completions
+// 本地 HTTP 代理实时翻译两个协议的请求和流式响应
+let codexProxyServer = null;
+const CODEX_PROXY_PORT = 18928;
+const PROXY_LOG = path.join(os.tmpdir(), 'ibwhale-proxy.log');
+
+function proxyLog(msg) {
+  const ts = new Date().toISOString().slice(11, 23);
+  const line = '[' + ts + '] ' + msg + '\n';
+  try { fs.appendFileSync(PROXY_LOG, line); } catch {}
+  console.log('[ibwhale-proxy] ' + msg);
+}
+
+function startCodexProxy() {
+  if (codexProxyServer) return;
+  proxyLog('启动代理端口 ' + CODEX_PROXY_PORT + '...');
+
+  const server = http.createServer((req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', '*');
+    res.setHeader('Connection', 'close');
+    if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
+
+    proxyLog('收到 ' + req.method + ' ' + req.url + ' from ' + (req.socket?.remoteAddress || '?'));
+    req.on('error', (e) => proxyLog('请求错误: ' + e.message));
+    res.on('error', (e) => proxyLog('响应错误: ' + e.message));
+
+    if (req.method === 'POST' && req.url.includes('/responses')) {
+      handleCodexProxy(req, res); return;
+    }
+    if (req.method === 'GET' && req.url.includes('/models')) {
+      proxyLog('GET /models → 返回空列表');
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ object: 'list', data: [] })); return;
+    }
+    // 其他请求透传到上游
+    proxyToUpstream(req, res);
+  });
+  server.listen(CODEX_PROXY_PORT, '127.0.0.1', () => {
+    proxyLog('代理已启动: http://127.0.0.1:' + CODEX_PROXY_PORT);
+    // 自检：验证上游连通性
+    const upstream = getProxyUpstream();
+    proxyLog('上游: ' + upstream.url + ' model=' + upstream.model + ' key=' + (upstream.apiKey ? '***' + upstream.apiKey.slice(-4) : '无'));
+    const u = new URL(upstream.url);
+    const agent = u.protocol === 'https:' ? https : http;
+    const pingReq = agent.request({
+      hostname: u.hostname, port: u.port || 443, path: '/v1/models', method: 'GET',
+      headers: { 'Authorization': 'Bearer ' + upstream.apiKey },
+      timeout: 10000, rejectUnauthorized: false,
+    }, (pingRes) => {
+      proxyLog('上游连通性检测: ' + pingRes.statusCode);
+    });
+    pingReq.on('error', (e) => proxyLog('上游连通性检测失败: ' + e.message));
+    pingReq.end();
+  });
+  server.on('error', (err) => { console.error('[ibwhale] Codex 代理启动失败:', err.message); });
+  codexProxyServer = server;
+}
+
+function stopCodexProxy() {
+  if (codexProxyServer) { codexProxyServer.close(); codexProxyServer = null; }
+}
+
+function getProxyUpstream() {
+  const env = readIbwhaleEnv();
+  const baseUrl = env.ANTHROPIC_BASE_URL || '';
+  const apiKey = env.ANTHROPIC_AUTH_TOKEN || '';
+  let url = baseUrl.replace(/\/anthropic$/, '').replace(/\/apps\/anthropic$/, '');
+  if (url && !url.endsWith('/v1')) url += '/v1';
+  return { url, apiKey, model: env.ANTHROPIC_MODEL || 'deepseek-v4-flash' };
+}
+
+// 将 Responses API 的 input 数组翻译为 Chat Completions 的 messages 数组
+function translateInputToMessages(input) {
+  const messages = [];
+  for (const item of input) {
+    if (!item) continue;
+    // 用户/系统/开发者消息
+    if (item.role === 'user' || item.role === 'system' || item.role === 'developer') {
+      let content = item.content;
+      if (Array.isArray(content)) {
+        content = content.map(p => (p.type === 'input_text' || p.type === 'text') ? p.text : '').join('');
+      }
+      messages.push({ role: item.role, content: content || '' });
+    }
+    // 助手消息（可能带 tool_calls）
+    else if (item.role === 'assistant') {
+      const msg = { role: 'assistant' };
+      if (item.content) {
+        let content = item.content;
+        if (Array.isArray(content)) content = content.map(p => p.text || '').join('');
+        msg.content = content || null;
+      } else { msg.content = null; }
+      if (item.tool_calls) msg.tool_calls = item.tool_calls;
+      messages.push(msg);
+    }
+    // Responses API function_call → Chat Completions assistant + tool_calls
+    else if (item.type === 'function_call') {
+      messages.push({
+        role: 'assistant', content: null,
+        tool_calls: [{ id: item.call_id || '0', type: 'function', function: { name: item.name || '', arguments: item.arguments || '' } }]
+      });
+    }
+    // 工具结果
+    else if (item.type === 'function_call_output') {
+      messages.push({ role: 'tool', content: item.output || '', tool_call_id: item.call_id || '0' });
+    }
+  }
+  return messages;
+}
+
+// 翻译工具定义：Responses 平铺格式 → Chat Completions 嵌套格式
+function translateTools(tools) {
+  if (!Array.isArray(tools)) return undefined;
+  return tools.map(t => {
+    if (t.function) return t;
+    return { type: 'function', function: { name: t.name, description: t.description || '', parameters: t.parameters || {} } };
+  });
+}
+
+function translateToChatCompletions(body) {
+  const messages = [];
+  // instructions → system message
+  if (body.instructions) messages.push({ role: 'system', content: body.instructions });
+  // input → messages
+  if (Array.isArray(body.input)) messages.push(...translateInputToMessages(body.input));
+
+  const chatBody = {
+    model: body.model || getProxyUpstream().model,
+    messages,
+    stream: body.stream !== false,
+  };
+  const tools = translateTools(body.tools);
+  if (tools && tools.length > 0) chatBody.tools = tools;
+  if (body.max_output_tokens) chatBody.max_tokens = body.max_output_tokens;
+  if (body.temperature !== undefined) chatBody.temperature = body.temperature;
+  if (body.top_p !== undefined) chatBody.top_p = body.top_p;
+
+  return chatBody;
+}
+
+function genId(prefix) { return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+
+// SSE 流式响应翻译状态机
+function createSSETranslator(res, model) {
+  const responseId = genId('resp');
+  const msgId = genId('msg');
+  let state = 'init'; // init → text / tool_call → done
+  let opened = false;
+  let ended = false;
+  let textBuf = '';
+  let usage = null;
+  let tcArgs = {}; // call_id → accumulated arguments
+  let tcName = '';
+
+  function send(evt, data) {
+    if (ended) return;
+    try { res.write('event: ' + evt + '\ndata: ' + JSON.stringify(data) + '\n\n'); } catch { ended = true; }
+  }
+
+  function openText() {
+    if (opened) return; opened = true;
+    send('response.created', { type: 'response.created', response: { id: responseId, object: 'response', model, status: 'in_progress', output: [] } });
+    send('response.in_progress', { type: 'response.in_progress', response_id: responseId });
+    send('response.output_item.added', { type: 'response.output_item.added', output_index: 0, item: { type: 'message', id: msgId, status: 'in_progress', role: 'assistant', content: [] } });
+    send('response.content_part.added', { type: 'response.content_part.added', item_id: msgId, output_index: 0, content_index: 0, part: { type: 'output_text', text: '' } });
+  }
+
+  function openToolCall(name) {
+    if (opened) return; opened = true;
+    tcName = name || '';
+    send('response.created', { type: 'response.created', response: { id: responseId, object: 'response', model, status: 'in_progress', output: [] } });
+    send('response.in_progress', { type: 'response.in_progress', response_id: responseId });
+    send('response.output_item.added', { type: 'response.output_item.added', output_index: 0, item: { type: 'function_call', id: msgId, status: 'in_progress', call_id: '0', name: tcName, arguments: '' } });
+  }
+
+  function finish() {
+    if (ended || state === 'done') return;
+    state = 'done'; ended = true;
+    if (!opened) openText();
+
+    const usageOut = usage ? { input_tokens: usage.prompt_tokens || 0, output_tokens: usage.completion_tokens || 0, total_tokens: usage.total_tokens || 0 } : null;
+
+    if (Object.keys(tcArgs).length > 0) {
+      for (const [cid, args] of Object.entries(tcArgs)) {
+        send('response.function_call_arguments.done', { type: 'response.function_call_arguments.done', item_id: msgId, output_index: 0, call_id: cid, arguments: args });
+      }
+      send('response.output_item.done', { type: 'response.output_item.done', output_index: 0, item: { type: 'function_call', id: msgId, status: 'completed', call_id: '0', name: tcName, arguments: tcArgs['0'] || '' } });
+      send('response.completed', {
+        type: 'response.completed',
+        response: { id: responseId, object: 'response', model, status: 'completed',
+          output: [{ type: 'function_call', id: msgId, status: 'completed', call_id: '0', name: tcName, arguments: tcArgs['0'] || '' }],
+          ...(usageOut ? { usage: usageOut } : {}) }
+      });
+    } else {
+      send('response.output_text.done', { type: 'response.output_text.done', item_id: msgId, output_index: 0, content_index: 0, text: textBuf });
+      send('response.content_part.done', { type: 'response.content_part.done', item_id: msgId, output_index: 0, content_index: 0, part: { type: 'output_text', text: textBuf } });
+      send('response.output_item.done', { type: 'response.output_item.done', output_index: 0, item: { type: 'message', id: msgId, status: 'completed', role: 'assistant', content: [{ type: 'output_text', text: textBuf }] } });
+      send('response.completed', {
+        type: 'response.completed',
+        response: { id: responseId, object: 'response', model, status: 'completed',
+          output: [{ type: 'message', id: msgId, status: 'completed', role: 'assistant', content: [{ type: 'output_text', text: textBuf }] }],
+          ...(usageOut ? { usage: usageOut } : {}) }
+      });
+    }
+    try { res.end(); } catch {}
+  }
+
+  function process(chunk) {
+    if (ended || state === 'done') return;
+    if (!chunk || !chunk.choices) return;
+    const c = chunk.choices[0];
+    if (!c) return;
+    const delta = c.delta || {};
+    if (chunk.usage) usage = chunk.usage;
+
+    // 文本增量
+    if (delta.content) {
+      if (state === 'init') { state = 'text'; openText(); }
+      if (state === 'text') {
+        textBuf += delta.content;
+        send('response.output_text.delta', { type: 'response.output_text.delta', item_id: msgId, output_index: 0, content_index: 0, delta: delta.content });
+      }
+    }
+    // 工具调用增量
+    if (delta.tool_calls) {
+      if (state === 'init' || state === 'text') { state = 'tool_call'; }
+      for (const tc of delta.tool_calls) {
+        const cid = tc.id || tc.index?.toString() || '0';
+        if (tc.function) {
+          if (tc.function.name) openToolCall(tc.function.name);
+          if (tc.function.arguments) {
+            tcArgs[cid] = (tcArgs[cid] || '') + tc.function.arguments;
+            send('response.function_call_arguments.delta', { type: 'response.function_call_arguments.delta', item_id: msgId, output_index: 0, call_id: cid, delta: tc.function.arguments });
+          }
+        }
+      }
+    }
+    // 结束
+    if (c.finish_reason) {
+      if (c.finish_reason === 'tool_calls' && Object.keys(tcArgs).length > 0) {
+        for (const [cid, args] of Object.entries(tcArgs)) {
+          send('response.function_call_arguments.done', { type: 'response.function_call_arguments.done', item_id: msgId, output_index: 0, call_id: cid, arguments: args });
+        }
+        const outputItem = { type: 'function_call', id: msgId, status: 'completed', call_id: '0', name: tcName, arguments: tcArgs['0'] || '' };
+        send('response.output_item.done', { type: 'response.output_item.done', output_index: 0, item: outputItem });
+        // 必须发送 response.completed，否则 Codex 认为流异常断开
+        const tcUsage = usage ? { input_tokens: usage.prompt_tokens || 0, output_tokens: usage.completion_tokens || 0, total_tokens: usage.total_tokens || 0 } : null;
+        send('response.completed', {
+          type: 'response.completed',
+          response: { id: responseId, object: 'response', model, status: 'completed', output: [outputItem], ...(tcUsage ? { usage: tcUsage } : {}) }
+        });
+        state = 'done'; ended = true;
+        try { res.end(); } catch {}
+      } else if (c.finish_reason === 'stop') {
+        finish();
+      }
+    }
+  }
+
+  return { process, finish, getState: () => state, isEnded: () => ended };
+}
+
+function handleCodexProxy(req, res) {
+  const reqId = genId('req');
+  proxyLog(reqId + ' 开始处理 POST /v1/responses');
+
+  const upstream = getProxyUpstream();
+  if (!upstream.url || !upstream.apiKey) {
+    proxyLog(reqId + ' 错误: API 未配置');
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: { message: 'API 未配置' } })); return;
+  }
+  let resEnded = false;
+  function safeEnd() { if (!resEnded) { resEnded = true; try { res.end(); } catch {} } }
+  res.on('error', () => { resEnded = true; });
+
+  const chunks = [];
+  req.on('data', c => chunks.push(c));
+  req.on('end', () => {
+    try {
+      const raw = Buffer.concat(chunks);
+      let body;
+      if (req.headers['content-encoding'] === 'zstd' || req.headers['content-encoding'] === 'zst') {
+        try { body = JSON.parse(require('zlib').zstdDecompressSync(raw).toString('utf-8')); }
+        catch { body = JSON.parse(raw.toString('utf-8')); }
+      } else {
+        body = JSON.parse(raw.toString('utf-8'));
+      }
+      const chatBody = translateToChatCompletions(body);
+      proxyLog(reqId + ' model=' + chatBody.model + ' msgs=' + chatBody.messages.length + ' stream=' + chatBody.stream + ' tools=' + (chatBody.tools ? chatBody.tools.length : 0));
+      const streamMode = chatBody.stream !== false;
+      const u = new URL(upstream.url);
+      const isHttps = u.protocol === 'https:';
+      const agentType = isHttps ? https : http;
+      const opts = {
+        hostname: u.hostname, port: u.port || (isHttps ? 443 : 80),
+        path: '/v1/chat/completions', method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + upstream.apiKey,
+          'Accept': streamMode ? 'text/event-stream' : 'application/json' },
+        timeout: 600000,
+        rejectUnauthorized: false,
+      };
+      const upReq = agentType.request(opts, (upRes) => {
+        proxyLog(reqId + ' 上游响应 ' + upRes.statusCode);
+        if (upRes.statusCode >= 400) {
+          let errBuf = '';
+          upRes.on('data', d => errBuf += d);
+          upRes.on('end', () => {
+            console.error('[ibwhale-proxy] ' + reqId + ' 上游错误 ' + upRes.statusCode + ':', errBuf.slice(0, 500));
+            safeEnd();
+          });
+          // Forward error to client in Responses format
+          res.writeHead(upRes.statusCode, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: { message: '上游 API 错误: ' + upRes.statusCode } }));
+          resEnded = true;
+          return;
+        }
+        if (streamMode) {
+          res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
+          const tr = createSSETranslator(res, chatBody.model);
+          let buf = '';
+          upRes.on('data', d => {
+            if (resEnded || tr.isEnded()) return;
+            buf += d.toString('utf-8');
+            const lines = buf.split('\n'); buf = lines.pop() || '';
+            for (const line of lines) {
+              if (resEnded || tr.isEnded()) break;
+              if (line.startsWith('data: ')) {
+                const js = line.slice(6).trim();
+                if (js === '[DONE]') { proxyLog(reqId + ' [DONE]'); tr.finish(); return; }
+                try { tr.process(JSON.parse(js)); } catch {}
+              }
+            }
+          });
+          upRes.on('end', () => {
+            proxyLog(reqId + ' 上游流结束');
+            // 处理遗留在 buffer 中的 [DONE] (可能没有尾随换行)
+            if (buf.trim() === 'data: [DONE]' || buf.includes('[DONE]')) {
+              proxyLog(reqId + ' 残余 [DONE]');
+            }
+            tr.finish();
+          });
+          upRes.on('error', (e) => { console.error('[ibwhale-proxy] ' + reqId + ' SSE 流错误:', e.message); tr.finish(); });
+        } else {
+          let rbuf = '';
+          upRes.on('data', d => rbuf += d);
+          upRes.on('end', () => {
+            if (resEnded) return;
+            try {
+              const cr = JSON.parse(rbuf.toString('utf-8'));
+              const rid = genId('resp'); const mid = genId('msg');
+              const text = cr.choices?.[0]?.message?.content || '';
+              const toolCalls = cr.choices?.[0]?.message?.tool_calls;
+              let output;
+              if (toolCalls) {
+                output = toolCalls.map((tc, i) => ({ type: 'function_call', id: mid, call_id: tc.id || String(i), name: tc.function?.name || '', arguments: tc.function?.arguments || '' }));
+              } else {
+                output = [{ type: 'message', id: mid, status: 'completed', role: 'assistant', content: [{ type: 'output_text', text }] }];
+              }
+              const respBody = {
+                id: rid, object: 'response', model: chatBody.model, status: 'completed', output,
+                ...(cr.usage ? { usage: { input_tokens: cr.usage.prompt_tokens || 0, output_tokens: cr.usage.completion_tokens || 0, total_tokens: cr.usage.total_tokens || 0 } } : {})
+              };
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify(respBody));
+              resEnded = true;
+            } catch (e) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: { message: '翻译失败' } })); resEnded = true; }
+          });
+        }
+      });
+      upReq.on('error', (e) => { console.error('[ibwhale-proxy] ' + reqId + ' 上游连接失败:', e.message); if (!resEnded) { res.writeHead(502); res.end(JSON.stringify({ error: { message: '上游不可达' } })); resEnded = true; } });
+      upReq.on('timeout', () => { console.error('[ibwhale-proxy] ' + reqId + ' 上游超时'); upReq.destroy(); if (!resEnded) { res.writeHead(504); res.end(JSON.stringify({ error: { message: '上游超时' } })); resEnded = true; } });
+      upReq.write(JSON.stringify(chatBody));
+      upReq.end();
+    } catch (e) {
+      console.error('[ibwhale-proxy] ' + reqId + ' 解析错误:', e.message);
+      if (!resEnded) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: { message: '请求解析失败' } })); resEnded = true; }
+    }
+  });
+}
+
+function proxyToUpstream(req, res) {
+  const upstream = getProxyUpstream();
+  if (!upstream.url) { res.writeHead(500); res.end(); return; }
+  const u = new URL(upstream.url);
+  const isHttps = u.protocol === 'https:';
+  const agent = isHttps ? https : http;
+  const opts = {
+    hostname: u.hostname, port: u.port || (isHttps ? 443 : 80),
+    path: req.url, method: req.method,
+    headers: { ...req.headers, host: u.hostname, 'Authorization': 'Bearer ' + upstream.apiKey },
+    timeout: 120000,
+    rejectUnauthorized: false,
+  };
+  const upReq = agent.request(opts, (upRes) => { res.writeHead(upRes.statusCode, upRes.headers); upRes.pipe(res); });
+  upReq.on('error', () => { res.writeHead(502); res.end(); });
+  req.pipe(upReq);
+}
+
+// ===== Agent 注册表 =====
+// env: { envVarName: 'sourceKey' } — sourceKey 指向 ibwhale .env 中的键名
+//       envVarName 为 null 表示不需要映射（agent 用独立配置体系）
+// setup: 首次启动前需要的配置命令或指引
+// providerEnv: 按 provider 分发不同变量名的映射
+const AGENTS = [
+  {
+    id: 'claude-code',
+    name: 'Claude Code',
+    icon: '\u{1F9E0}',
+    desc: 'Anthropic 官方 CLI Agent',
+    detect: { type: 'builtin', commands: [] },
+    install: null,
+    launch: {
+      command: 'node bin\\claude-code --dangerously-skip-permissions',
+      cwd: path.join(__dirname, '..'),
+      env: { ANTHROPIC_BASE_URL: 'ANTHROPIC_BASE_URL', ANTHROPIC_AUTH_TOKEN: 'ANTHROPIC_AUTH_TOKEN', ANTHROPIC_MODEL: 'ANTHROPIC_MODEL' },
+    },
+    setup: null,
+    builtin: true,
+  },
+  {
+    id: 'claude-code-official',
+    name: 'Claude Code 官方',
+    icon: '\u{1F4E6}',
+    desc: 'Anthropic 官方 Claude Code CLI (npm 全局安装)',
+    detect: { type: 'command', commands: ['claude'] },
+    install: { type: 'npm', command: 'npm install -g @anthropic-ai/claude-code' },
+    launch: {
+      command: 'claude --dangerously-skip-permissions',
+      cwd: null,
+      // 官方版 Claude Code 环境变量：官方 API 用 ANTHROPIC_API_KEY，第三方用 ANTHROPIC_AUTH_TOKEN + ANTHROPIC_BASE_URL
+      providerEnv: {
+        anthropic:  { envVar: 'ANTHROPIC_API_KEY', baseUrl: null },
+        aliyun:     { envVar: 'ANTHROPIC_AUTH_TOKEN', baseUrl: 'ANTHROPIC_BASE_URL' },
+        deepseek:   { envVar: 'ANTHROPIC_AUTH_TOKEN', baseUrl: 'ANTHROPIC_BASE_URL' },
+        zhipu:      { envVar: 'ANTHROPIC_AUTH_TOKEN', baseUrl: 'ANTHROPIC_BASE_URL' },
+        moonshot:   { envVar: 'ANTHROPIC_AUTH_TOKEN', baseUrl: 'ANTHROPIC_BASE_URL' },
+        linktoken:  { envVar: 'ANTHROPIC_AUTH_TOKEN', baseUrl: 'ANTHROPIC_BASE_URL' },
+        openrouter: { envVar: 'ANTHROPIC_AUTH_TOKEN', baseUrl: 'ANTHROPIC_BASE_URL' },
+        local:      { envVar: 'ANTHROPIC_AUTH_TOKEN', baseUrl: 'ANTHROPIC_BASE_URL' },
+        custom:     { envVar: 'ANTHROPIC_AUTH_TOKEN', baseUrl: 'ANTHROPIC_BASE_URL' },
+      },
+      // 对于官方版，ANTHROPIC_BASE_URL 保持 /anthropic 后缀（不需要转换到 OpenAI 格式）
+      keepAnthropicSuffix: true,
+    },
+    setup: null,
+  },
+  {
+    id: 'hermes',
+    name: 'Hermes',
+    icon: '\u{1F52E}',
+    desc: '开源多模型 Agent 框架',
+    detect: { type: 'command', commands: ['hermes', 'hermes-agent'] },
+    install: { type: 'pip', command: 'pip install hermes-agent' },
+    launch: {
+      command: 'hermes',
+      cwd: null,
+      useConpty: true,
+      // Hermes 读取 ~/.hermes/config.yaml，env 变量作为后备
+      // envVar=API key变量, baseUrl=端点变量, modelVar=模型变量
+      providerEnv: {
+        deepseek:    { envVar: 'DEEPSEEK_API_KEY', baseUrl: 'DEEPSEEK_BASE_URL', modelVar: 'DEEPSEEK_MODEL' },
+        linktoken:   { envVar: 'DEEPSEEK_API_KEY', baseUrl: 'DEEPSEEK_BASE_URL', modelVar: 'DEEPSEEK_MODEL' },
+        anthropic:   { envVar: 'ANTHROPIC_API_KEY', baseUrl: 'ANTHROPIC_BASE_URL', modelVar: 'ANTHROPIC_MODEL' },
+        openai:      { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL', modelVar: 'OPENAI_MODEL' },
+        aliyun:      { envVar: 'DASHSCOPE_API_KEY', baseUrl: 'DASHSCOPE_BASE_URL', modelVar: 'DASHSCOPE_MODEL' },
+        moonshot:    { envVar: 'MOONSHOT_API_KEY', baseUrl: 'MOONSHOT_BASE_URL', modelVar: 'MOONSHOT_MODEL' },
+        zhipu:       { envVar: 'ZHIPU_API_KEY', baseUrl: 'ZHIPU_BASE_URL', modelVar: 'ZHIPU_MODEL' },
+        openrouter:  { envVar: 'OPENROUTER_API_KEY', baseUrl: 'OPENROUTER_BASE_URL', modelVar: 'OPENROUTER_MODEL' },
+        local:       { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL', modelVar: 'OPENAI_MODEL' },
+        custom:      { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL', modelVar: 'OPENAI_MODEL' },
+      },
+      fallbackEnv: { envVar: 'HERMES_API_KEY', baseUrl: 'HERMES_API_BASE', modelVar: 'HERMES_DEFAULT_MODEL' },
+      extraEnv: { PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', PYTHONUNBUFFERED: '1', LANG: 'en_US.UTF-8' },
+    },
+    setup: { command: 'hermes setup', desc: '运行 hermes setup 配置 API key 和模型' },
+  },
+  {
+    id: 'aider',
+    name: 'Aider',
+    icon: '\u{1F6E0}',
+    hidden: true,
+    desc: 'AI 结对编程工具',
+    detect: { type: 'command', commands: ['aider'] },
+    install: { type: 'pip', command: 'pip install aider-chat' },
+    launch: {
+      command: 'aider',
+      cwd: null,
+      useConpty: true,
+      providerEnv: {
+        anthropic:   { envVar: 'ANTHROPIC_API_KEY', baseUrl: 'ANTHROPIC_BASE_URL' },
+        openai:      { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL' },
+        deepseek:    { envVar: 'DEEPSEEK_API_KEY', baseUrl: 'DEEPSEEK_BASE_URL' },
+        openrouter:  { envVar: 'OPENROUTER_API_KEY', baseUrl: 'OPENROUTER_BASE_URL' },
+        aliyun:      { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL' },
+        zhipu:       { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL' },
+        moonshot:    { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL' },
+        linktoken:   { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL' },
+        local:       { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL' },
+        custom:      { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL' },
+      },
+      fallbackEnv: { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL' },
+    },
+    setup: { command: 'aider --help', desc: 'Aider 通过环境变量读取 API key' },
+  },
+  {
+    id: 'codex',
+    name: 'Codex CLI',
+    icon: '\u{1F916}',
+    hidden: true,
+    desc: 'OpenAI 官方 CLI Agent',
+    detect: { type: 'command', commands: ['codex', 'openai-codex'] },
+    install: { type: 'npm', command: 'npm install -g @openai/codex' },
+    launch: {
+      command: 'codex',
+      cwd: null,
+      useConpty: true,
+      extraEnv: { NO_PROXY: 'localhost,127.0.0.1', no_proxy: 'localhost,127.0.0.1' },
+      // Codex 是 OpenAI SDK 的 CLI 包装，需要 OPENAI_API_KEY 和 OPENAI_BASE_URL
+      providerEnv: {
+        openai:      { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL' },
+        custom:      { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL' },
+        deepseek:    { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL' },
+        linktoken:   { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL' },
+        aliyun:      { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL' },
+        zhipu:       { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL' },
+        moonshot:    { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL' },
+        openrouter:  { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL' },
+        local:       { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL' },
+      },
+      fallbackEnv: { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL' },
+    },
+    setup: { command: 'codex login', desc: '运行 codex login 登录 OpenAI 账号' },
+  },
+  {
+    id: 'gemini-cli',
+    name: 'Gemini CLI',
+    icon: '\u{1F31F}',
+    hidden: true,
+    desc: 'Google Gemini CLI',
+    detect: { type: 'command', commands: ['gemini', 'google-gemini'] },
+    install: { type: 'npm', command: 'npm install -g @google/gemini-cli' },
+    launch: {
+      command: 'gemini',
+      cwd: null,
+      providerEnv: {
+        google:    { envVar: 'GEMINI_API_KEY' },
+        deepseek:  { envVar: 'DEEPSEEK_API_KEY', baseUrl: 'DEEPSEEK_BASE_URL' },
+        openai:    { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL' },
+        anthropic: { envVar: 'ANTHROPIC_API_KEY', baseUrl: 'ANTHROPIC_BASE_URL' },
+      },
+      fallbackEnv: { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL' },
+    },
+    setup: { command: 'gemini auth', desc: '运行 gemini auth 配置认证' },
+  },
+  {
+    id: 'cline',
+    name: 'Cline',
+    icon: '\u{1F40C}',
+    hidden: true,
+    desc: 'VS Code AI 编程助手 CLI',
+    detect: { type: 'command', commands: ['cline'] },
+    install: { type: 'npm', command: 'npm install -g cline' },
+    launch: {
+      command: 'cline',
+      cwd: null,
+      providerEnv: {
+        anthropic:   { envVar: 'ANTHROPIC_API_KEY', baseUrl: 'ANTHROPIC_BASE_URL' },
+        openai:      { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL' },
+        deepseek:    { envVar: 'DEEPSEEK_API_KEY', baseUrl: 'DEEPSEEK_BASE_URL' },
+        openrouter:  { envVar: 'OPENROUTER_API_KEY', baseUrl: 'OPENROUTER_BASE_URL' },
+        aliyun:      { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL' },
+        zhipu:       { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL' },
+        moonshot:    { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL' },
+        linktoken:   { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL' },
+        local:       { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL' },
+        custom:      { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL' },
+      },
+      fallbackEnv: { envVar: 'OPENAI_API_KEY', baseUrl: 'OPENAI_BASE_URL' },
+    },
+    setup: null,
+  },
+  {
+    id: 'custom',
+    name: '自定义命令',
+    icon: '\u{2699}',
+    hidden: true,
+    desc: '输入任意命令行启动',
+    detect: { type: 'always', commands: [] },
+    install: null,
+    launch: { command: '', cwd: null },
+    setup: null,
+  },
+];
+
+// ===== Agent 配置持久化 =====
+function getAgentConfigFile() {
+  return path.join(CONFIG_DIR, 'agent_configs.json');
+}
+
+function loadAgentConfigs() {
+  try {
+    const file = getAgentConfigFile();
+    if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, 'utf-8'));
+  } catch {}
+  return {};
+}
+
+function saveAgentConfig(agentId, cfg) {
+  try {
+    if (!fs.existsSync(CONFIG_DIR)) fs.mkdirSync(CONFIG_DIR, { recursive: true });
+    const configs = loadAgentConfigs();
+    configs[agentId] = cfg;
+    fs.writeFileSync(getAgentConfigFile(), JSON.stringify(configs, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('[ibwhale] 保存 agent 配置失败:', err.message);
+  }
+}
+
+function deleteAgentConfig(agentId) {
+  try {
+    const configs = loadAgentConfigs();
+    delete configs[agentId];
+    fs.writeFileSync(getAgentConfigFile(), JSON.stringify(configs, null, 2), 'utf-8');
+  } catch {}
+}
+
+// 从 ibwhale .env 读取当前配置
+function readIbwhaleEnv() {
+  const projectRoot = path.join(__dirname, '..');
+  const envFile = path.join(projectRoot, '.env');
+  const env = {};
+  if (fs.existsSync(envFile)) {
+    try {
+      const content = fs.readFileSync(envFile, 'utf-8');
+      for (const line of content.split('\n')) {
+        const trimmed = line.trim();
+        if (trimmed && !trimmed.startsWith('#')) {
+          const eq = trimmed.indexOf('=');
+          if (eq > 0) {
+            env[trimmed.substring(0, eq).trim()] = trimmed.substring(eq + 1).trim();
+          }
+        }
+      }
+    } catch {}
+  }
+  return env;
+}
 
 function findGitBash() {
   // 1. Common installation paths (most reliable for standard installs)
@@ -214,7 +1034,7 @@ function findGitBash() {
   return null;
 }
 
-function getShellEnv() {
+function getShellEnv(agentType) {
   const gitBash = findGitBash();
   const env = {
     ...process.env,
@@ -225,6 +1045,7 @@ function getShellEnv() {
   // 加载 .env 文件到环境变量
   const projectRoot = path.join(__dirname, '..');
   const envFile = path.join(projectRoot, '.env');
+  const ibwhaleEnv = {};
   if (fs.existsSync(envFile)) {
     try {
       const content = fs.readFileSync(envFile, 'utf-8');
@@ -236,6 +1057,7 @@ function getShellEnv() {
             const key = trimmed.substring(0, eq).trim();
             const val = trimmed.substring(eq + 1).trim();
             env[key] = val;
+            ibwhaleEnv[key] = val;
           }
         }
       }
@@ -244,7 +1066,127 @@ function getShellEnv() {
   if (gitBash) {
     env.CLAUDE_CODE_GIT_BASH_PATH = gitBash;
   }
+
+  // ===== Agent 特定环境变量注入 =====
+  if (agentType && agentType !== 'claude-code') {
+    const agent = AGENTS.find(a => a.id === agentType);
+    if (agent && agent.launch) {
+      // 1. 注入额外环境变量（如 Python 编码修复）
+      if (agent.launch.extraEnv) {
+        Object.assign(env, agent.launch.extraEnv);
+      }
+
+      // 2. 加载用户手动保存的 agent 特定配置（用于 config 文件写入和 env 覆盖）
+      const agentConfigs = loadAgentConfigs();
+      const savedConfig = agentConfigs[agentType];
+
+      // Hermes: 清除 auth.json 凭据池 + 写入 config.yaml (provider: custom)
+      if (agentType === 'hermes') {
+        clearHermesCredentialPool();
+        const effectiveKey = (savedConfig && savedConfig.apiKey) || ibwhaleEnv.ANTHROPIC_AUTH_TOKEN || '';
+        const effectiveUrl = (savedConfig && savedConfig.baseUrl) || ibwhaleEnv.ANTHROPIC_BASE_URL || '';
+        const effectiveModel = (savedConfig && savedConfig.model) || ibwhaleEnv.ANTHROPIC_MODEL || '';
+        if (effectiveKey) {
+          writeHermesConfig(effectiveKey, effectiveUrl, effectiveModel);
+        }
+      }
+
+      // Codex CLI: 写入 config.toml (自定义 model_providers)
+      if (agentType === 'codex') {
+        const effectiveKey = (savedConfig && savedConfig.apiKey) || ibwhaleEnv.ANTHROPIC_AUTH_TOKEN || '';
+        const effectiveUrl = (savedConfig && savedConfig.baseUrl) || ibwhaleEnv.ANTHROPIC_BASE_URL || '';
+        const effectiveModel = (savedConfig && savedConfig.model) || ibwhaleEnv.ANTHROPIC_MODEL || '';
+        if (effectiveKey) {
+          writeCodexConfig(effectiveKey, effectiveUrl, effectiveModel);
+        }
+      }
+
+      // 3. 根据 provider 映射 env 变量
+      const provider = ibwhaleEnv.MODEL_PROVIDER || '';
+      const providerEnv = agent.launch.providerEnv;
+      const fallbackEnv = agent.launch.fallbackEnv;
+
+      if (providerEnv && providerEnv[provider]) {
+        const mapping = providerEnv[provider];
+        if (mapping.envVar && ibwhaleEnv.ANTHROPIC_AUTH_TOKEN) {
+          env[mapping.envVar] = ibwhaleEnv.ANTHROPIC_AUTH_TOKEN;
+        }
+        if (mapping.baseUrl && ibwhaleEnv.ANTHROPIC_BASE_URL) {
+          let url = ibwhaleEnv.ANTHROPIC_BASE_URL;
+          if (agent.launch.keepAnthropicSuffix) {
+            // 官方 Claude Code 等需要保留 /anthropic 后缀
+          } else {
+            // 将 Anthropic 格式的 URL 转为 OpenAI 兼容格式
+            url = url.replace(/\/anthropic$/, '').replace(/\/apps\/anthropic$/, '');
+            if (!url.endsWith('/v1')) url += '/v1';
+          }
+          env[mapping.baseUrl] = url;
+        }
+        if (mapping.modelVar && ibwhaleEnv.ANTHROPIC_MODEL) {
+          env[mapping.modelVar] = ibwhaleEnv.ANTHROPIC_MODEL;
+        }
+      } else if (fallbackEnv) {
+        if (fallbackEnv.envVar && ibwhaleEnv.ANTHROPIC_AUTH_TOKEN) {
+          env[fallbackEnv.envVar] = ibwhaleEnv.ANTHROPIC_AUTH_TOKEN;
+        }
+        if (fallbackEnv.baseUrl && ibwhaleEnv.ANTHROPIC_BASE_URL) {
+          let url = ibwhaleEnv.ANTHROPIC_BASE_URL;
+          if (agent.launch.keepAnthropicSuffix) {
+            // 保持原样
+          } else {
+            url = url.replace(/\/anthropic$/, '').replace(/\/apps\/anthropic$/, '');
+            if (!url.endsWith('/v1')) url += '/v1';
+          }
+          env[fallbackEnv.baseUrl] = url;
+        }
+        if (fallbackEnv.modelVar && ibwhaleEnv.ANTHROPIC_MODEL) {
+          env[fallbackEnv.modelVar] = ibwhaleEnv.ANTHROPIC_MODEL;
+        }
+      }
+
+      // 4. 用户手动保存的 agent 特定配置覆盖自动映射（savedConfig 已在上面加载）
+      if (savedConfig) {
+        if (savedConfig.apiKey) {
+          const effectiveVar = (providerEnv && providerEnv[provider]?.envVar) || fallbackEnv?.envVar || 'API_KEY';
+          env[effectiveVar] = savedConfig.apiKey;
+        }
+        if (savedConfig.baseUrl) {
+          const effectiveBase = (providerEnv && providerEnv[provider]?.baseUrl) || fallbackEnv?.baseUrl || 'API_BASE';
+          env[effectiveBase] = savedConfig.baseUrl;
+        }
+        if (savedConfig.model) {
+          const effectiveModel = (providerEnv && providerEnv[provider]?.modelVar) || (fallbackEnv && fallbackEnv.modelVar) || 'DEFAULT_MODEL';
+          env[effectiveModel] = savedConfig.model;
+        }
+      }
+
+      // Codex: 强制 OPENAI_BASE_URL 指向本地代理（而非上游 URL）
+      // Codex 0.128.0+ 强制 wire_api="responses"，必须通过本地代理翻译协议
+      if (agentType === 'codex') {
+        env.OPENAI_BASE_URL = 'http://127.0.0.1:' + CODEX_PROXY_PORT + '/v1';
+      }
+    }
+  }
+
   return env;
+}
+
+function buildAgentCommand(agentType, projectRoot) {
+  const agent = AGENTS.find(a => a.id === agentType);
+  if (!agent || !agent.launch) {
+    // Fallback to Claude Code
+    return ['/c', 'pushd ' + projectRoot + ' && node bin\\claude-code --dangerously-skip-permissions'];
+  }
+  const { command, cwd } = agent.launch;
+  const workDir = cwd || process.cwd();
+  if (process.platform === 'win32') {
+    if (workDir && workDir !== projectRoot) {
+      return ['/c', 'pushd ' + workDir + ' && ' + command];
+    }
+    return ['/c', 'pushd ' + projectRoot + ' && ' + command];
+  } else {
+    return ['-c', 'cd ' + workDir + ' && ' + command];
+  }
 }
 
 function spawnPtyForConversation(convId) {
@@ -257,17 +1199,20 @@ function spawnPtyForConversation(convId) {
   const pty = require('node-pty');
   const projectRoot = path.join(__dirname, '..');
   const shell = process.platform === 'win32' ? 'cmd.exe' : 'bash';
-  const args = process.platform === 'win32'
-    ? ['/c', 'pushd ' + projectRoot + ' && node bin\\claude-code --dangerously-skip-permissions']
-    : [path.join(projectRoot, 'run.bat')];
+  const agentType = (existing && existing.agentType) || 'claude-code';
+  const args = buildAgentCommand(agentType, projectRoot);
+
+  // Per-agent PTY settings (Python TUI agents need ConPTY for proper console I/O forwarding)
+  const agent = AGENTS.find(a => a.id === agentType);
+  const useConpty = (agent && agent.launch && agent.launch.useConpty) ? true : false;
 
   try {
     const ptyProcess = pty.spawn(shell, args, {
       name: 'xterm-256color',
       cols: 120,
       rows: 30,
-      useConpty: false,
-      env: getShellEnv(),
+      useConpty: useConpty,
+      env: getShellEnv(agentType),
     });
 
     ptyProcess.onData((data) => {
@@ -284,8 +1229,9 @@ function spawnPtyForConversation(convId) {
       if (targetWin && !targetWin.isDestroyed()) {
         targetWin.webContents.send('conv-exit', convId);
       }
+      // 仅当退出的 pty 仍是当前 pty 时才清空，防止旧 pty onExit 覆盖新 pty
       const conv = conversations.get(convId);
-      if (conv) conv.ptyProcess = null;
+      if (conv && conv.ptyProcess === ptyProcess) conv.ptyProcess = null;
     });
 
     const conv = conversations.get(convId);
@@ -414,7 +1360,7 @@ function spawnNewWindow() {
 
   // 新窗口独立 PTY
   const id = 'conv-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
-  conversations.set(id, { id, title: '新项目', ptyProcess: null, pid: null });
+  conversations.set(id, { id, title: '新项目', ptyProcess: null, pid: null, agentType: 'claude-code' });
   windowMap.set(win, { id, activeConvId: id, convIds: new Set([id]) });
   spawnPtyForConversation(id);
 
@@ -526,6 +1472,7 @@ ipcMain.handle('conv-new', (event) => {
     title: '新对话',
     ptyProcess: ownerConv?.ptyProcess || null,
     pid: ownerConv?.pid || null,
+    agentType: ownerConv?.agentType || 'claude-code',
   });
   info.activeConvId = id;
   info.convIds.add(id);
@@ -562,7 +1509,7 @@ ipcMain.handle('conv-list', (event) => {
   const list = [];
   for (const [id, conv] of conversations) {
     if (convIds && !convIds.has(id)) continue;
-    list.push({ id, title: conv.title, pid: conv.pid, active: id === activeId });
+    list.push({ id, title: conv.title, pid: conv.pid, active: id === activeId, agentType: conv.agentType || 'claude-code' });
   }
   return list;
 });
@@ -580,6 +1527,215 @@ ipcMain.on('conv-restart', (_event, convId) => {
   if (conversations.has(convId)) {
     spawnPtyForConversation(convId);
   }
+});
+
+// ===== Agent 管理 =====
+
+// 检测本地已安装的 agent — 三级搜索：where/which → npm global → 常见路径
+async function detectAgent(agent) {
+  if (agent.detect.type === 'builtin') return { installed: true, version: null };
+  if (agent.detect.type === 'always') return { installed: true, version: null };
+  if (agent.detect.type === 'command') {
+    for (const cmd of agent.detect.commands) {
+      const cmdName = cmd.split(' ')[0];
+
+      // 1. where/which 命令
+      try {
+        const whichCmd = process.platform === 'win32' ? 'where ' + cmdName : 'which ' + cmdName;
+        const result = execSync(whichCmd, { encoding: 'utf8', timeout: 5000 }).trim();
+        if (result && !result.includes('Could not find') && !result.includes('not found')) {
+          let version = null;
+          try {
+            const verResult = execSync(cmdName + ' --version', { encoding: 'utf8', timeout: 5000 }).trim();
+            version = verResult.split('\n')[0].slice(0, 80);
+          } catch {}
+          return { installed: true, version };
+        }
+      } catch {}
+
+      // 2. npm global prefix 搜索
+      try {
+        const npmPrefix = execSync('npm config get prefix', { encoding: 'utf8', timeout: 5000 }).trim();
+        if (npmPrefix && npmPrefix !== 'undefined') {
+          const npmBin = process.platform === 'win32' ? npmPrefix : path.join(npmPrefix, 'bin');
+          const exts = process.platform === 'win32' ? ['.cmd', '.exe', ''] : [''];
+          for (const ext of exts) {
+            const candidate = path.join(npmBin, cmdName + ext);
+            if (fs.existsSync(candidate)) return { installed: true, version: candidate };
+          }
+        }
+      } catch {}
+
+      // 3. 常见安装路径动态搜索（适配不同用户/系统）
+      const exts = process.platform === 'win32' ? ['.exe', '.cmd', '.bat', ''] : [''];
+      const commonDirs = process.platform === 'win32' ? [
+        path.join(os.homedir(), 'AppData', 'Local', 'bin'),
+        path.join(os.homedir(), 'AppData', 'Roaming', 'npm'),
+        path.join(process.env.LOCALAPPDATA || '', 'bin'),
+        path.join(process.env.LOCALAPPDATA || '', 'Programs'),
+        path.join(process.env.APPDATA || '', 'npm'),
+        path.join(process.env.ProgramFiles || 'C:\\Program Files', cmdName),
+        path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', cmdName),
+      ] : [
+        '/usr/local/bin',
+        path.join(os.homedir(), '.local', 'bin'),
+        path.join(os.homedir(), 'bin'),
+      ];
+
+      for (const dir of commonDirs) {
+        try {
+          for (const ext of exts) {
+            const candidate = path.join(dir, cmdName + ext);
+            if (fs.existsSync(candidate)) return { installed: true, version: candidate };
+          }
+          // Also check for subdirectory with same name (e.g. Program Files\Hermes\hermes.exe)
+          const subDir = path.join(dir, cmdName);
+          if (fs.existsSync(subDir)) {
+            for (const ext of exts) {
+              const candidate = path.join(subDir, cmdName + ext);
+              if (fs.existsSync(candidate)) return { installed: true, version: candidate };
+            }
+          }
+        } catch {}
+      }
+
+      // 4. 检测通过 pip 安装的命令（Python Scripts 目录）
+      if (process.platform === 'win32') {
+        try {
+          const pythonDirs = [
+            path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'Python'),
+            path.join(os.homedir(), 'AppData', 'Roaming', 'Python'),
+            path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python'),
+          ];
+          for (const pyBase of pythonDirs) {
+            try {
+              if (!fs.existsSync(pyBase)) continue;
+              for (const pyVer of fs.readdirSync(pyBase)) {
+                const scriptsDir = path.join(pyBase, pyVer, 'Scripts');
+                if (fs.existsSync(scriptsDir)) {
+                  for (const ext of exts) {
+                    const candidate = path.join(scriptsDir, cmdName + ext);
+                    if (fs.existsSync(candidate)) return { installed: true, version: candidate };
+                  }
+                }
+              }
+            } catch {}
+          }
+        } catch {}
+      }
+    }
+    return { installed: false, version: null };
+  }
+  return { installed: false, version: null };
+}
+
+ipcMain.handle('agent-get-all', async () => {
+  const agentConfigs = loadAgentConfigs();
+  return AGENTS.filter(a => !a.hidden).map(a => ({
+    id: a.id, name: a.name, icon: a.icon, desc: a.desc,
+    builtin: !!a.builtin, hasInstall: !!a.install, hasSetup: !!a.setup,
+    detect: a.detect, install: a.install, setup: a.setup,
+    hasConfig: !!agentConfigs[a.id],
+  }));
+});
+
+ipcMain.handle('agent-scan', async () => {
+  const results = [];
+  for (const agent of AGENTS) {
+    const status = await detectAgent(agent);
+    results.push({ id: agent.id, installed: status.installed, version: status.version });
+  }
+  return results;
+});
+
+ipcMain.handle('agent-get-config', async (_event, agentId) => {
+  const agent = AGENTS.find(a => a.id === agentId);
+  if (!agent) return { ok: false, error: '未知的 Agent' };
+  const configs = loadAgentConfigs();
+  const saved = configs[agentId] || {};
+  const ibwhaleEnv = readIbwhaleEnv();
+  return {
+    ok: true,
+    agentId,
+    saved,
+    ibwhaleProvider: ibwhaleEnv.MODEL_PROVIDER || '',
+    ibwhaleBaseUrl: ibwhaleEnv.ANTHROPIC_BASE_URL || '',
+    hasIbwhaleKey: !!ibwhaleEnv.ANTHROPIC_AUTH_TOKEN,
+    needsSetup: agent.setup && !saved.apiKey && !ibwhaleEnv.ANTHROPIC_AUTH_TOKEN,
+  };
+});
+
+ipcMain.handle('agent-save-config', async (_event, { agentId, apiKey, baseUrl, model }) => {
+  saveAgentConfig(agentId, { apiKey: apiKey || '', baseUrl: baseUrl || '', model: model || '' });
+  return { ok: true };
+});
+
+ipcMain.handle('agent-install', async (event, agentId) => {
+  const agent = AGENTS.find(a => a.id === agentId);
+  if (!agent || !agent.install) return { ok: false, error: 'Agent 不支持安装' };
+  const { info } = getWindowInfo(event);
+  const conv = info ? conversations.get(info.activeConvId) : null;
+  if (conv && conv.ptyProcess) {
+    conv.ptyProcess.write(agent.install.command + '\r\n');
+    return { ok: true };
+  }
+  return { ok: false, error: '没有活跃的终端会话' };
+});
+
+ipcMain.handle('agent-run-setup', async (event, agentId) => {
+  const agent = AGENTS.find(a => a.id === agentId);
+  if (!agent || !agent.setup) return { ok: false, error: 'Agent 不支持 setup' };
+  const { info } = getWindowInfo(event);
+  const conv = info ? conversations.get(info.activeConvId) : null;
+  if (conv && conv.ptyProcess) {
+    conv.ptyProcess.write(agent.setup.command + '\r\n');
+    return { ok: true };
+  }
+  return { ok: false, error: '没有活跃的终端会话' };
+});
+
+ipcMain.handle('agent-switch', async (event, agentId) => {
+  const agent = AGENTS.find(a => a.id === agentId);
+  if (!agent) return { ok: false, error: '未知的 Agent' };
+
+  // 对于非 builtin 的 agent，先检测是否安装
+  if (!agent.builtin && agent.detect.type !== 'always') {
+    const status = await detectAgent(agent);
+    if (!status.installed) return { ok: false, error: 'Agent 未安装' };
+  }
+
+  const { win, info } = getWindowInfo(event);
+  if (!win || !info) return { ok: false, error: '无法获取窗口信息' };
+
+  const convId = info.activeConvId;
+  const conv = conversations.get(convId);
+  if (!conv) return { ok: false, error: '对话不存在' };
+
+  // 检查 agent 是否需要配置（非 claude-code 且有 provider 映射但无有效配置）
+  if (agentId !== 'claude-code' && agentId !== 'custom' && agent.launch && (agent.launch.providerEnv || agent.launch.fallbackEnv)) {
+    const configs = loadAgentConfigs();
+    const saved = configs[agentId];
+    const ibwhaleEnv = readIbwhaleEnv();
+    const hasKey = (saved && saved.apiKey) || ibwhaleEnv.ANTHROPIC_AUTH_TOKEN;
+    if (!hasKey) {
+      return { ok: false, error: '未配置 API key', needsSetup: true, agentId };
+    }
+  }
+
+  // Kill existing PTY
+  if (conv.ptyProcess) {
+    try { conv.ptyProcess.kill(); } catch {}
+    conv.ptyProcess = null;
+    conv.pid = null;
+  }
+
+  // Update agent type
+  conv.agentType = agentId;
+
+  // Restart PTY with new agent
+  spawnPtyForConversation(convId);
+
+  return { ok: true, agentId, agentName: agent.name };
 });
 
 // Set model env and restart active PTY
@@ -726,7 +1882,7 @@ ipcMain.handle('auto-update', async () => {
 
     // 2. 找到 ZIP 资产（优先 ibwhale.zip，其次 Source code）
     const zipAsset = (release.assets || []).find(a => {
-      if (a.name === 'ibwhale.zip') return true;
+      if (a.name.startsWith('ibwhale') && a.name.endsWith('.zip')) return true;
       if (a.name.endsWith('.zip') && (a.name.includes('Source') || a.name.includes('source'))) return true;
       return false;
     });
@@ -1279,10 +2435,11 @@ ipcMain.handle('get-token-usage', (_event, filter = {}) => {
 
 // ===== App 生命周期 =====
 app.whenReady().then(() => {
+  startCodexProxy();
   createWindow();
   // Create initial conversation
   const id = 'conv-' + Date.now().toString(36);
-  conversations.set(id, { id, title: '新对话', ptyProcess: null, pid: null });
+  conversations.set(id, { id, title: '新对话', ptyProcess: null, pid: null, agentType: 'claude-code' });
   windowMap.set(mainWindow, { id, activeConvId: id, convIds: new Set([id]) });
   spawnPtyForConversation(id);
 });
@@ -1292,4 +2449,4 @@ app.on('window-all-closed', () => {
   app.quit();
 });
 
-app.on('will-quit', () => killAllPtys());
+app.on('will-quit', () => { stopCodexProxy(); killAllPtys(); });
