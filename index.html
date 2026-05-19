@@ -821,7 +821,7 @@
 const { getPrice } = require('./pricing.js');
 // ===== Providers (与 web/app.js 完全同步 =====
 const PROVIDERS = [
-  { id:"aliyun", label:"阿里云百炼", icon:"☁️", apiBaseUrl:"https://dashscope.aliyuncs.com/apps/anthropic", models:[
+  { id:"aliyun", label:"阿里云百炼", icon:"☁️", apiBaseUrl:"https://dashscope.aliyuncs.com/apps/anthropic", openaiBaseUrl:"https://dashscope.aliyuncs.com/compatible-mode/v1", models:[
     {id:"qwen3.6-plus",label:"Qwen3.6-Plus",date:"2026-04",rating:9.0,price:"2/8"},
     {id:"qwen3.5-plus",label:"Qwen3.5-Plus",date:"2026-02",rating:8.8,price:"1.25/5"},
     {id:"qwen3.5-flash",label:"Qwen3.5-Flash",date:"2026-02",rating:8.3,price:"0.25/1"},
@@ -833,11 +833,11 @@ const PROVIDERS = [
     {id:"qwen3-coder-flash",label:"Qwen3-Coder-Flash",date:"2025-09",rating:8.2,price:"0.5/2"},
     {id:"qwen-long",label:"Qwen-Long",date:"2024-02",rating:7.5,price:"0.5/2"},
   ]},
-  { id:"deepseek", label:"DeepSeek", icon:"🐋", apiBaseUrl:"https://api.deepseek.com/anthropic", models:[
+  { id:"deepseek", label:"DeepSeek", icon:"🐋", apiBaseUrl:"https://api.deepseek.com/anthropic", openaiBaseUrl:"https://api.deepseek.com/v1", models:[
     {id:"deepseek-chat",label:"DeepSeek Chat",date:"2026-03",rating:9.1,price:"0.3/0.5"},
     {id:"deepseek-reasoner",label:"DeepSeek Reasoner",date:"2025-01",rating:9.0,price:"0.55/2.2"},
   ]},
-  { id:"zhipu", label:"智谱", icon:"🧠", apiBaseUrl:"https://open.bigmodel.cn/api/anthropic", models:[
+  { id:"zhipu", label:"智谱", icon:"🧠", apiBaseUrl:"https://open.bigmodel.cn/api/anthropic", openaiBaseUrl:"https://open.bigmodel.cn/api/paas/v4", models:[
     {id:"glm-5.1",label:"GLM-5.1",date:"2026-03",rating:8.9,price:"2/8"},
     {id:"glm-5",label:"GLM-5",date:"2026-02",rating:8.8,price:"3/12"},
     {id:"glm-5-turbo",label:"GLM-5-Turbo",date:"2026-03",rating:8.3,price:"0.5/2"},
@@ -846,13 +846,13 @@ const PROVIDERS = [
     {id:"glm-4.7-flash",label:"GLM-4.7-Flash",date:"2025-06",rating:7.8,price:"0"},
     {id:"glm-4.6",label:"GLM-4.6",date:"2025-03",rating:8.0,price:"0.5/2"},
   ]},
-  { id:"moonshot", label:"月之暗面", icon:"🌙", apiBaseUrl:"https://api.moonshot.cn/anthropic", models:[
+  { id:"moonshot", label:"月之暗面", icon:"🌙", apiBaseUrl:"https://api.moonshot.cn/anthropic", openaiBaseUrl:"https://api.moonshot.cn/v1", models:[
     {id:"kimi-k2.5",label:"Kimi K2.5",date:"2026-01",rating:8.7,price:"0.6/2.5"},
     {id:"kimi-k2-thinking",label:"Kimi K2 Thinking",date:"2026-01",rating:8.8,price:"0.6/2.5"},
     {id:"kimi-k2",label:"Kimi K2",date:"2025-07",rating:8.4,price:"0.5/2"},
   ]},
-  { id:"linktoken", label:"linktoken", icon:'<img src="img/linktoken logo small 256.png" style="width:22px;height:22px;object-fit:contain">', apiBaseUrl:"https://linktoken.ai", models:[] },
-  { id:"openrouter", label:"OpenRouter", icon:"🔗", apiBaseUrl:"https://openrouter.ai/api/v1", models:[
+  { id:"linktoken", label:"linktoken", icon:'<img src="img/linktoken logo small 256.png" style="width:22px;height:22px;object-fit:contain">', apiBaseUrl:"https://linktoken.ai", openaiBaseUrl:"https://linktoken.ai/v1", models:[] },
+  { id:"openrouter", label:"OpenRouter", icon:"🔗", apiBaseUrl:"https://openrouter.ai/api/v1", openaiBaseUrl:"https://openrouter.ai/api/v1", models:[
     {id:"anthropic/claude-sonnet-4-6",label:"Claude Sonnet 4.6",date:"2026-02",rating:9.1,price:"3/15"},
     {id:"anthropic/claude-opus-4-6",label:"Claude Opus 4.6",date:"2026-02",rating:9.4,price:"15/75"},
     {id:"openai/gpt-5",label:"GPT-5",date:"2025-08",rating:9.2,price:"10/40"},
@@ -861,8 +861,8 @@ const PROVIDERS = [
     {id:"meta-llama/llama-3.3-70b-instruct",label:"Llama 3.3 70B",date:"2024-12",rating:8.5,price:"0.2/0.4"},
     {id:"qwen/qwen3-235b-a22b",label:"Qwen3 235B",date:"2025-05",rating:8.7,price:"0.2/0.6"},
   ]},
-  { id:"custom", label:"自定义 API", icon:"⚙️", apiBaseUrl:"", models:[], isCustom: true },
-  { id:"local", label:"本地模型", icon:"💻", apiBaseUrl:"http://localhost:11434", models:[
+  { id:"custom", label:"自定义 API", icon:"⚙️", apiBaseUrl:"", openaiBaseUrl:"", models:[], isCustom: true },
+  { id:"local", label:"本地模型", icon:"💻", apiBaseUrl:"http://localhost:11434", openaiBaseUrl:"http://localhost:11434/v1", models:[
     {id:"llama3",label:"Llama 3",date:"2024-04",rating:8.0,price:"0"},
     {id:"qwen2.5",label:"Qwen 2.5",date:"2024-12",rating:7.7,price:"0"},
     {id:"deepseek-r1",label:"DeepSeek R1",date:"2025-01",rating:9.0,price:"0"},
@@ -930,7 +930,7 @@ async function persistConfig() {
   }
   const cfg = {
     providerId: selectedProviderId,
-    apiKey, baseUrl: '', selectedModelId, customModel, localServiceUrl, customApiUrl, userName,
+    apiKey, baseUrl: '', openaiBaseUrl: '', selectedModelId, customModel, localServiceUrl, customApiUrl, userName,
     theme: localStorage.getItem('ibwhale_theme') || '#2a2a2a',
     customModels,
     providerConfigs,
@@ -941,10 +941,13 @@ async function persistConfig() {
   if (p) {
     if (p.isCustom) {
       cfg.baseUrl = customApiUrl || '';
+      cfg.openaiBaseUrl = customApiUrl || '';
     } else if (selectedProviderId === 'local') {
       cfg.baseUrl = localServiceUrl || p.apiBaseUrl;
+      cfg.openaiBaseUrl = (localServiceUrl || p.apiBaseUrl).replace(/\/+$/, '') + '/v1';
     } else {
       cfg.baseUrl = p.apiBaseUrl;
+      cfg.openaiBaseUrl = p.openaiBaseUrl || '';
     }
   }
   if (window.electronAPI && window.electronAPI.saveConfig) {
@@ -1321,20 +1324,25 @@ document.getElementById('api-save').onclick = () => {
   }
   let modelId = customModelInput || selectedModelId || p?.models[0]?.id || (p?.isCustom ? '' : '');
   // Custom URL overrides default; local provider uses localUrl or customUrl; custom provider uses customUrl
-  let baseUrl;
+  let baseUrl, openaiBaseUrl;
   if (customUrl) {
     baseUrl = customUrl;
+    openaiBaseUrl = customUrl;
   } else if (selectedProviderId === 'local') {
     baseUrl = localUrl || p?.apiBaseUrl;
+    openaiBaseUrl = (localUrl || p?.apiBaseUrl || '').replace(/\/+$/, '') + '/v1';
   } else if (p?.isCustom) {
     baseUrl = customUrl;
+    openaiBaseUrl = customUrl;
   } else {
     baseUrl = p?.apiBaseUrl;
+    openaiBaseUrl = p?.openaiBaseUrl || '';
   }
   const cfg = {
     providerId: selectedProviderId,
     apiKey: key,
     baseUrl,
+    openaiBaseUrl,
     selectedModelId: customModelInput ? '' : modelId,
     customModel: customModelInput,
     localServiceUrl: localUrl,
@@ -1365,7 +1373,7 @@ document.getElementById('api-save').onclick = () => {
   showApiStatus('配置已保存 ✓', false);
   // Apply model env via main process (restarts PTY)
   if (window.electronAPI && window.electronAPI.setModelEnv) {
-    window.electronAPI.setModelEnv({ apiKey: key, baseUrl, model: modelId, providerId: selectedProviderId, customApiUrl: customApiUrl || customUrl });
+    window.electronAPI.setModelEnv({ apiKey: key, baseUrl, openaiBaseUrl, model: modelId, providerId: selectedProviderId, customApiUrl: customApiUrl || customUrl });
   }
   setTimeout(() => document.getElementById('api-overlay').classList.remove('open'), 800);
 };

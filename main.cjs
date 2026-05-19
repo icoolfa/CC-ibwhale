@@ -149,9 +149,11 @@ function saveLocalConfig(cfg) {
     try {
       const projectRoot = path.join(__dirname, '..');
       const envFile = path.join(projectRoot, '.env');
+      const openaiUrl = cfg.openaiBaseUrl || cfg.baseUrl.replace(/\/anthropic$/, '').replace(/\/apps\/anthropic$/, '').replace(/\/$/, '') + '/v1';
       const lines = [
         `MODEL_PROVIDER=${cfg.providerId || 'anthropic'}`,
         `ANTHROPIC_BASE_URL=${cfg.baseUrl}`,
+        `OPENAI_BASE_URL=${openaiUrl}`,
         `ANTHROPIC_AUTH_TOKEN=${cfg.apiKey}`,
         `ANTHROPIC_MODEL=${cfg.customModel || cfg.selectedModelId || 'claude-sonnet-4-6'}`,
         ...(cfg.customApiUrl ? [`CUSTOM_API_URL=${cfg.customApiUrl}`] : []),
@@ -1084,7 +1086,7 @@ function getShellEnv(agentType) {
       if (agentType === 'hermes') {
         clearHermesCredentialPool();
         const effectiveKey = (savedConfig && savedConfig.apiKey) || ibwhaleEnv.ANTHROPIC_AUTH_TOKEN || '';
-        const effectiveUrl = (savedConfig && savedConfig.baseUrl) || ibwhaleEnv.ANTHROPIC_BASE_URL || '';
+        const effectiveUrl = (savedConfig && savedConfig.baseUrl) || ibwhaleEnv.OPENAI_BASE_URL || ibwhaleEnv.ANTHROPIC_BASE_URL || '';
         const effectiveModel = (savedConfig && savedConfig.model) || ibwhaleEnv.ANTHROPIC_MODEL || '';
         if (effectiveKey) {
           writeHermesConfig(effectiveKey, effectiveUrl, effectiveModel);
@@ -1094,7 +1096,7 @@ function getShellEnv(agentType) {
       // Codex CLI: 写入 config.toml (自定义 model_providers)
       if (agentType === 'codex') {
         const effectiveKey = (savedConfig && savedConfig.apiKey) || ibwhaleEnv.ANTHROPIC_AUTH_TOKEN || '';
-        const effectiveUrl = (savedConfig && savedConfig.baseUrl) || ibwhaleEnv.ANTHROPIC_BASE_URL || '';
+        const effectiveUrl = (savedConfig && savedConfig.baseUrl) || ibwhaleEnv.OPENAI_BASE_URL || ibwhaleEnv.ANTHROPIC_BASE_URL || '';
         const effectiveModel = (savedConfig && savedConfig.model) || ibwhaleEnv.ANTHROPIC_MODEL || '';
         if (effectiveKey) {
           writeCodexConfig(effectiveKey, effectiveUrl, effectiveModel);
@@ -1112,12 +1114,16 @@ function getShellEnv(agentType) {
           env[mapping.envVar] = ibwhaleEnv.ANTHROPIC_AUTH_TOKEN;
         }
         if (mapping.baseUrl && ibwhaleEnv.ANTHROPIC_BASE_URL) {
-          let url = ibwhaleEnv.ANTHROPIC_BASE_URL;
+          let url;
           if (agent.launch.keepAnthropicSuffix) {
             // 官方 Claude Code 等需要保留 /anthropic 后缀
+            url = ibwhaleEnv.ANTHROPIC_BASE_URL;
+          } else if (ibwhaleEnv.OPENAI_BASE_URL) {
+            // 优先使用 .env 中预设的 OpenAI 格式 URL（各 provider 的正确端点不同）
+            url = ibwhaleEnv.OPENAI_BASE_URL;
           } else {
-            // 将 Anthropic 格式的 URL 转为 OpenAI 兼容格式
-            url = url.replace(/\/anthropic$/, '').replace(/\/apps\/anthropic$/, '');
+            // 兜底：将 Anthropic 格式的 URL 转为 OpenAI 兼容格式
+            url = ibwhaleEnv.ANTHROPIC_BASE_URL.replace(/\/anthropic$/, '').replace(/\/apps\/anthropic$/, '');
             if (!url.endsWith('/v1')) url += '/v1';
           }
           env[mapping.baseUrl] = url;
@@ -1130,11 +1136,15 @@ function getShellEnv(agentType) {
           env[fallbackEnv.envVar] = ibwhaleEnv.ANTHROPIC_AUTH_TOKEN;
         }
         if (fallbackEnv.baseUrl && ibwhaleEnv.ANTHROPIC_BASE_URL) {
-          let url = ibwhaleEnv.ANTHROPIC_BASE_URL;
+          let url;
           if (agent.launch.keepAnthropicSuffix) {
             // 保持原样
+            url = ibwhaleEnv.ANTHROPIC_BASE_URL;
+          } else if (ibwhaleEnv.OPENAI_BASE_URL) {
+            // 优先使用 .env 中预设的 OpenAI 格式 URL
+            url = ibwhaleEnv.OPENAI_BASE_URL;
           } else {
-            url = url.replace(/\/anthropic$/, '').replace(/\/apps\/anthropic$/, '');
+            url = ibwhaleEnv.ANTHROPIC_BASE_URL.replace(/\/anthropic$/, '').replace(/\/apps\/anthropic$/, '');
             if (!url.endsWith('/v1')) url += '/v1';
           }
           env[fallbackEnv.baseUrl] = url;
@@ -1749,6 +1759,7 @@ ipcMain.on('set-model-env', (event, cfg) => {
     const saveCfg = {
       providerId: cfg.providerId || 'custom',
       baseUrl: cfg.baseUrl,
+      openaiBaseUrl: cfg.openaiBaseUrl || '',
       apiKey: cfg.apiKey,
       customModel: cfg.model || cfg.customModel || '',
       selectedModelId: cfg.selectedModelId || '',
