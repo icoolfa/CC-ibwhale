@@ -709,7 +709,8 @@
     </button>
   </div>
   <div class="token-filter-tabs">
-    <button class="token-filter-tab active" data-filter="today" onclick="setTokenFilter('today')">今天</button>
+    <button class="token-filter-tab active" data-filter="session" onclick="setTokenFilter('session')">本次</button>
+    <button class="token-filter-tab" data-filter="today" onclick="setTokenFilter('today')">今天</button>
     <button class="token-filter-tab" data-filter="7days" onclick="setTokenFilter('7days')">近7天</button>
     <button class="token-filter-tab" data-filter="all" onclick="setTokenFilter('all')">全部</button>
   </div>
@@ -1974,7 +1975,7 @@ if (window.electronAPI?.getAppVersion) {
 const CNY_RATE = 7.25; // USD to CNY rate
 let tokenPanelOpen = false;
 let lastTokenData = null;
-let tokenFilter = 'today'; // 'today' | '7days' | 'all'
+let tokenFilter = 'session'; // 'session' | 'today' | '7days' | 'all'
 // Custom pricing (per million tokens, in ¥)
 let customInputPrice = parseFloat(localStorage.getItem('ibwhale_custom_input_price') || '-1');
 let customOutputPrice = parseFloat(localStorage.getItem('ibwhale_custom_output_price') || '-1');

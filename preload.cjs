@@ -58,4 +58,12 @@ window.electronAPI = {
   toggleWhip: () => ipcRenderer.send('toggle-whip'),
   getTokenUsage: (filter) => ipcRenderer.invoke('get-token-usage', filter || {}),
   fetchModels: (cfg) => ipcRenderer.invoke('fetch-models', cfg),
+  // Agent management
+  agentGetAll: () => ipcRenderer.invoke('agent-get-all'),
+  agentScan: () => ipcRenderer.invoke('agent-scan'),
+  agentGetConfig: (agentId) => ipcRenderer.invoke('agent-get-config', agentId),
+  agentSaveConfig: (cfg) => ipcRenderer.invoke('agent-save-config', cfg),
+  agentInstall: (agentId) => ipcRenderer.invoke('agent-install', agentId),
+  agentRunSetup: (agentId) => ipcRenderer.invoke('agent-run-setup', agentId),
+  agentSwitch: (agentId) => ipcRenderer.invoke('agent-switch', agentId),
 };

@@ -1,4 +1,4 @@
-// node_modules/@xterm/xterm/lib/xterm.mjs
+// ../node_modules/@xterm/xterm/lib/xterm.mjs
 var zs = Object.defineProperty;
 var Rl = Object.getOwnPropertyDescriptor;
 var Ll = (s15, t) => {
@@ -1252,7 +1252,7 @@ var $;
     };
   }
   Qe.chain = A;
-  let R = Symbol("HaltChainable");
+  let R = /* @__PURE__ */ Symbol("HaltChainable");
   class O {
     constructor() {
       this.steps = [];
@@ -1988,7 +1988,6 @@ var ts = class {
     this._emitter && (this._emitter.dispose(), this._emitter = null);
   }
 };
-var _a = Symbol("MicrotaskDelay");
 var Ye = class {
   constructor(t, e) {
     this._isDisposed = false;
@@ -9113,7 +9112,7 @@ var Dl = class extends D {
   }
 };
 
-// node_modules/@xterm/addon-fit/lib/addon-fit.mjs
+// ../node_modules/@xterm/addon-fit/lib/addon-fit.mjs
 var h = 2;
 var _ = 1;
 var o = class {
@@ -9247,6 +9246,7 @@ var term = new Dl({
   smoothScrollDuration: 100,
   scrollSensitivity: 4
 });
+window.terminal = term;
 window.updateTerminalColors = (colors) => {
   if (colors.foreground) term.options.theme = { ...term.options.theme, foreground: colors.foreground };
 };
@@ -9385,7 +9385,7 @@ trBtn.onclick = async () => {
   }
 };
 var MODES = ["manual", "autoAccept", "plan", "bypass"];
-var currentModeIndex = 0;
+var currentModeIndex = 3;
 var modeConfig = {
   manual: { label: "\u624B\u52A8\u6A21\u5F0F", symbol: "", cssClass: "mode-default", desc: "\u9010\u9879\u786E\u8BA4\u3002\u4EFB\u4F55\u654F\u611F\u64CD\u4F5C\u90FD\u9700\u8981\u7528\u6237\u786E\u8BA4\u3002\u65E5\u5E38\u5F00\u53D1\u63A8\u8350\u3002" },
   autoAccept: { label: "\u63A5\u53D7\u6A21\u5F0F", symbol: "\u23F5\u23F5", cssClass: "mode-acceptEdits", desc: "\u81EA\u52A8\u6267\u884C\u3002\u8DF3\u8FC7\u6587\u4EF6\u4FEE\u6539\u7684\u786E\u8BA4\u6B65\u9AA4\uFF08Shell\u547D\u4EE4\u4ECD\u9700\u786E\u8BA4\uFF09\u3002" },

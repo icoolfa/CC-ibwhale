@@ -104,6 +104,8 @@ const term = new Terminal({
     brightBlack:'#5a5a5a',brightRed:'#fca5a5',brightGreen:'#34d399',brightYellow:'#fcd34d',brightBlue:'#93c5fd',brightMagenta:'#d8b4fe',brightCyan:'#67e8f9',brightWhite:'#fff' },
   scrollback: 10000, smoothScrollDuration: 100, scrollSensitivity: 4,
 });
+// 暴露 terminal 实例给 index.html 中的 agent 切换逻辑
+(window as any).terminal = term;
 // 暴露终端配色更新接口，供 index.html 切换主题时调用
 (window as any).updateTerminalColors = (colors: { foreground?: string; background?: string }) => {
   if (colors.foreground) term.options.theme = { ...term.options.theme, foreground: colors.foreground };
@@ -230,7 +232,7 @@ trBtn.onclick = async () => {
 // Mode switching — \x1b[Z (Shift+Tab) cycles forward: manual → autoAccept → plan → bypass
 const MODES = ['manual', 'autoAccept', 'plan', 'bypass'] as const;
 type ModeName = typeof MODES[number];
-let currentModeIndex = 0; // 0=manual, 1=autoAccept, 2=plan, 3=bypass
+let currentModeIndex = 3; // 0=manual, 1=autoAccept, 2=plan, 3=bypass（默认高权限模式）
 
 const modeConfig: Record<ModeName, { label: string; symbol: string; cssClass: string; desc: string }> = {
   manual:     { label: '手动模式',   symbol: '',         cssClass: 'mode-default',    desc: '逐项确认。任何敏感操作都需要用户确认。日常开发推荐。' },

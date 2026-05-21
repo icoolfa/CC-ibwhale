@@ -1371,7 +1371,7 @@ function spawnNewWindow() {
   // 新窗口独立 PTY
   const id = 'conv-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
   conversations.set(id, { id, title: '新项目', ptyProcess: null, pid: null, agentType: 'claude-code' });
-  windowMap.set(win, { id, activeConvId: id, convIds: new Set([id]) });
+  windowMap.set(win, { id, activeConvId: id, convIds: new Set([id]), startTime: Date.now() });
   spawnPtyForConversation(id);
 
   win.once('ready-to-show', () => {
@@ -2352,8 +2352,13 @@ let _tokenUsageCache = {}; // { cacheKey: { result, time } }
 
 ipcMain.handle('get-token-usage', (_event, filter = {}) => {
   try {
-    // Build cache key from filter
-    const cacheKey = JSON.stringify(filter);
+    // 获取请求来源窗口的启动时间
+    const senderWin = BrowserWindow.fromWebContents(_event.sender);
+    const winInfo = senderWin ? windowMap.get(senderWin) : null;
+    const winStartMs = winInfo ? winInfo.startTime : 0;
+
+    // 缓存键加窗口隔离
+    const cacheKey = (winInfo ? winInfo.id : 'orphan') + '|' + JSON.stringify(filter);
     const now = Date.now();
     const cached = _tokenUsageCache[cacheKey];
     if (cached && now - cached.time < 10000) return cached.result;
@@ -2361,56 +2366,62 @@ ipcMain.handle('get-token-usage', (_event, filter = {}) => {
     const projectsDir = path.join(os.homedir(), '.claude', 'projects');
     if (!fs.existsSync(projectsDir)) return { ok: false };
 
-    // Parse date filter
+    // 只扫描 ibwhale 自己的项目目录（排除机器上其他 Claude Code 实例的数据）
+    const ibwhaleProjectRoot = path.join(__dirname, '..');
+    const ibwhaleProjectDir = ibwhaleProjectRoot.replace(/[^a-zA-Z0-9]/g, '-').replace(/^-+|-+$/g, '');
+    const projectPath = path.join(projectsDir, ibwhaleProjectDir);
+    if (!fs.existsSync(projectPath)) return { ok: false };
+
+    // 时间过滤下界：窗口启动时间（精确到毫秒）永为下界
     const today = new Date();
-    const todayStr = today.toISOString().slice(0, 10); // YYYY-MM-DD
-    const sinceDate = filter.since === 'today' ? todayStr :
-                      filter.since === '7days' ? new Date(today - 7 * 86400000).toISOString().slice(0, 10) :
-                      null;
+    const winStartISO = winStartMs ? new Date(winStartMs).toISOString() : '';
+    const todayISO = today.toISOString().slice(0, 10) + 'T00:00:00.000Z';
+    const d7ISO = new Date(today - 7 * 86400000).toISOString().slice(0, 10) + 'T00:00:00.000Z';
+
+    let sinceISO;
+    if (filter.since === 'today') {
+      sinceISO = winStartISO > todayISO ? winStartISO : todayISO;
+    } else if (filter.since === '7days') {
+      sinceISO = winStartISO > d7ISO ? winStartISO : d7ISO;
+    } else {
+      // 默认按窗口启动时间（含 'session' 或未指定）
+      sinceISO = winStartISO;
+    }
 
     let totalInput = 0, totalOutput = 0, entryCount = 0;
     const modelStats = {}; // { model: { input, output, count } }
 
-    // Determine which projects to scan
-    const projectDirs = filter.project
-      ? [filter.project]
-      : fs.readdirSync(projectsDir);
+    // 只读 ibwhale 项目目录下的 jsonl
+    for (const sessionFile of fs.readdirSync(projectPath)) {
+      if (!sessionFile.endsWith('.jsonl')) continue;
+      try {
+        const content = fs.readFileSync(path.join(projectPath, sessionFile), 'utf-8');
+        for (const line of content.split('\n')) {
+          if (!line.trim()) continue;
+          try {
+            const obj = JSON.parse(line);
+            const ts = obj?.timestamp; // 完整 ISO: "2026-05-06T09:34:04.230Z"
+            if (sinceISO && ts && ts < sinceISO) continue;
 
-    for (const projectDir of projectDirs) {
-      const projectPath = path.join(projectsDir, projectDir);
-      if (!fs.existsSync(projectPath) || !fs.statSync(projectPath).isDirectory()) continue;
-
-      for (const sessionFile of fs.readdirSync(projectPath)) {
-        if (!sessionFile.endsWith('.jsonl')) continue;
-        try {
-          const content = fs.readFileSync(path.join(projectPath, sessionFile), 'utf-8');
-          for (const line of content.split('\n')) {
-            if (!line.trim()) continue;
-            try {
-              const obj = JSON.parse(line);
-              const ts = obj?.timestamp?.slice(0, 10); // YYYY-MM-DD
-              if (sinceDate && ts && ts < sinceDate) continue;
-
-              const msg = obj?.message;
-              const u = msg?.usage;
-              if (u && (u.input_tokens > 0 || u.output_tokens > 0)) {
-                const inp = u.input_tokens || 0;
-                const out = u.output_tokens || 0;
-                totalInput += inp;
-                totalOutput += out;
-                entryCount++;
-                const m = msg.model || '';
-                if (m && m !== '<synthetic>' && m !== 'unknown') {
-                  if (!modelStats[m]) modelStats[m] = { input: 0, output: 0, count: 0 };
-                  modelStats[m].input += inp;
-                  modelStats[m].output += out;
-                  modelStats[m].count++;
-                }
+            const msg = obj?.message;
+            const u = msg?.usage;
+            if (u && (u.input_tokens > 0 || u.output_tokens > 0)) {
+              const inp = u.input_tokens || 0;
+              const out = u.output_tokens || 0;
+              totalInput += inp;
+              totalOutput += out;
+              entryCount++;
+              const m = msg.model || '';
+              if (m && m !== '<synthetic>' && m !== 'unknown') {
+                if (!modelStats[m]) modelStats[m] = { input: 0, output: 0, count: 0 };
+                modelStats[m].input += inp;
+                modelStats[m].output += out;
+                modelStats[m].count++;
               }
-            } catch {}
-          }
-        } catch {}
-      }
+            }
+          } catch {}
+        }
+      } catch {}
     }
 
     // Build per-model breakdown sorted by usage
@@ -2451,7 +2462,7 @@ app.whenReady().then(() => {
   // Create initial conversation
   const id = 'conv-' + Date.now().toString(36);
   conversations.set(id, { id, title: '新对话', ptyProcess: null, pid: null, agentType: 'claude-code' });
-  windowMap.set(mainWindow, { id, activeConvId: id, convIds: new Set([id]) });
+  windowMap.set(mainWindow, { id, activeConvId: id, convIds: new Set([id]), startTime: Date.now() });
   spawnPtyForConversation(id);
 });
 
