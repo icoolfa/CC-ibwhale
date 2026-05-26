@@ -66,4 +66,9 @@ window.electronAPI = {
   agentInstall: (agentId) => ipcRenderer.invoke('agent-install', agentId),
   agentRunSetup: (agentId) => ipcRenderer.invoke('agent-run-setup', agentId),
   agentSwitch: (agentId) => ipcRenderer.invoke('agent-switch', agentId),
+  // History persistence
+  historySave: (data) => ipcRenderer.invoke('history-save', data),
+  historyLoadAll: () => ipcRenderer.invoke('history-load-all'),
+  historyLoadContent: (dateFolder, convId) => ipcRenderer.invoke('history-load-content', { dateFolder, convId }),
+  historyDelete: (dateFolder, convId) => ipcRenderer.invoke('history-delete', { dateFolder, convId }),
 };

@@ -15,6 +15,9 @@ error.log
 # Claude Code
 .claude/
 
+# ibwhale local history
+.ibwhale/
+
 # Windows
 Thumbs.db
 *.lnk

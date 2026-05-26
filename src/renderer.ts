@@ -102,7 +102,7 @@ const term = new Terminal({
     selectionBackground:'rgba(16,163,127,0.3)', selectionForeground:'#fff',
     black:'#1a1a1a',red:'#f87171',green:'#10a37f',yellow:'#fbbf24',blue:'#60a5fa',magenta:'#c084fc',cyan:'#22d3ee',white:'#ececf1',
     brightBlack:'#5a5a5a',brightRed:'#fca5a5',brightGreen:'#34d399',brightYellow:'#fcd34d',brightBlue:'#93c5fd',brightMagenta:'#d8b4fe',brightCyan:'#67e8f9',brightWhite:'#fff' },
-  scrollback: 10000, smoothScrollDuration: 100, scrollSensitivity: 4,
+  scrollback: 20000, smoothScrollDuration: 100, scrollSensitivity: 4,
 });
 // 暴露 terminal 实例给 index.html 中的 agent 切换逻辑
 (window as any).terminal = term;

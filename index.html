@@ -53,6 +53,24 @@
     .theme-dot.theme-dot-light { border-color: #555; }
     .theme-dot.theme-dot-light.active { border-color: var(--accent); }
 
+    /* ── History Section ── */
+    .history-section { border-top: 1px solid var(--border); overflow-y: auto; }
+    .history-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 6px; cursor: pointer; user-select: none; }
+    .history-header-title { font-size: 12px; font-weight: 600; color: var(--text-sub); text-transform: uppercase; letter-spacing: 0.5px; }
+    .history-header-chevron { width: 16px; height: 16px; transition: transform 0.2s; opacity: 0.6; color: var(--text-sub); }
+    .history-section.collapsed .history-header-chevron { transform: rotate(-90deg); }
+    .history-section.collapsed .history-group,
+    .history-section.collapsed .history-empty { display: none; }
+    .history-group { padding: 2px 12px 6px; }
+    .history-date-label { font-size: 10px; color: var(--text-sub); opacity: 0.7; padding: 6px 0 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .history-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; color: var(--text-sub); transition: all 0.12s; position: relative; }
+    .history-item:hover { background: var(--bg-hover); color: var(--text); }
+    .history-item-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .history-item-close { display: none; background: none; border: none; color: var(--text-sub); cursor: pointer; padding: 2px 4px; border-radius: 4px; font-size: 12px; line-height: 1; flex-shrink: 0; }
+    .history-item:hover .history-item-close { display: block; }
+    .history-item-close:hover { background: rgba(248,113,113,0.2); color: var(--error); }
+    .history-empty { text-align: center; color: var(--text-sub); font-size: 11px; padding: 12px; opacity: 0.6; }
+
     /* ── Main ── */
     .main { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100%; }
 
@@ -432,6 +450,14 @@
       </button>
     </div>
     <div class="sidebar-list" id="sidebar-list"></div>
+    <!-- History Section -->
+    <div class="history-section" id="history-section">
+      <div class="history-header" id="history-header">
+        <span class="history-header-title">历史记录</span>
+        <svg class="history-header-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div id="history-list"></div>
+    </div>
     <!-- Agent Switcher -->
     <div class="agent-section">
       <button class="agent-toggle-btn" id="agent-toggle-btn" title="切换 Agent">
@@ -1786,6 +1812,16 @@ function saveCurrentBuffer() {
     lines.pop();
   }
   conversationBuffers[activeConvId] = lines.join('\n');
+  // 同时持久化到磁盘
+  const conv = conversations.find(c => c.id === activeConvId);
+  if (conv && lines.length > 0 && lines.join('\n').trim().length > 0) {
+    window.electronAPI.historySave({
+      id: activeConvId,
+      title: conv.title,
+      agentType: conv.agentType || 'claude-code',
+      content: conversationBuffers[activeConvId],
+    });
+  }
 }
 
 // Load a conversation's buffer into terminal
@@ -1953,6 +1989,110 @@ async function initConversations() {
     activeConvId = list.find(c => c.active)?.id || list[0].id;
   }
   renderConversations();
+  loadHistory();
+  // 绑定历史区域折叠按钮
+  const hdr = document.getElementById('history-header');
+  if (hdr) hdr.onclick = toggleHistory;
+}
+
+// ===== History Management =====
+let historyEntries = [];
+let historyCollapsed = false;
+
+async function loadHistory() {
+  if (!window.electronAPI.historyLoadAll) return;
+  try {
+    historyEntries = await window.electronAPI.historyLoadAll();
+    renderHistory();
+  } catch (err) {
+    console.error('加载历史失败:', err);
+  }
+}
+
+function renderHistory() {
+  const container = document.getElementById('history-list');
+  if (!container) return;
+  if (historyEntries.length === 0) {
+    container.innerHTML = '<div class="history-empty">暂无历史记录</div>';
+    return;
+  }
+  // 按日期分组
+  const groups = {};
+  historyEntries.forEach(entry => {
+    const df = entry.dateFolder;
+    if (!groups[df]) groups[df] = [];
+    groups[df].push(entry);
+  });
+  let html = '';
+  for (const [dateFolder, entries] of Object.entries(groups)) {
+    html += '<div class="history-date-label">' + dateFolder + '</div>';
+    entries.forEach(entry => {
+      html += '<div class="history-item" data-date="' + dateFolder + '" data-id="' + entry.id + '" title="' + (entry.title || '') + '">';
+      html += '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;opacity:0.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+      html += '<span class="history-item-title">' + (entry.title || '新对话') + '</span>';
+      html += '<button class="history-item-close" title="删除记录"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>';
+      html += '</div>';
+    });
+  }
+  container.innerHTML = html;
+
+  // 绑定事件
+  container.querySelectorAll('.history-item').forEach(el => {
+    el.onclick = (e) => {
+      if (e.target.closest('.history-item-close')) return;
+      viewHistory(el.dataset.date, el.dataset.id);
+    };
+    el.querySelector('.history-item-close').onclick = (e) => {
+      e.stopPropagation();
+      deleteHistory(el.dataset.date, el.dataset.id);
+    };
+  });
+}
+
+async function viewHistory(dateFolder, convId) {
+  if (!window.electronAPI.historyLoadContent) return;
+  try {
+    const record = await window.electronAPI.historyLoadContent(dateFolder, convId);
+    if (!record || !record.content) return;
+    // 先保存当前 buffer
+    saveCurrentBuffer();
+    // 在终端中展示历史内容
+    if (terminal) {
+      terminal.clear();
+      terminal.writeln('');
+      terminal.writeln('  \x1b[2m—— 历史记录: ' + (record.title || '新对话') + ' (' + dateFolder + ') ——\x1b[0m');
+      terminal.writeln('');
+      const lines = record.content.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        terminal.writeln(lines[i]);
+      }
+      terminal.writeln('');
+      terminal.writeln('  \x1b[2m—— 以上为历史记录，你可以继续输入 ——\x1b[0m');
+      terminal.writeln('');
+    }
+  } catch (err) {
+    console.error('加载历史内容失败:', err);
+  }
+}
+
+async function deleteHistory(dateFolder, convId) {
+  if (!window.electronAPI.historyDelete) return;
+  try {
+    await window.electronAPI.historyDelete(dateFolder, convId);
+    historyEntries = historyEntries.filter(e => !(e.dateFolder === dateFolder && e.id === convId));
+    renderHistory();
+  } catch (err) {
+    console.error('删除历史失败:', err);
+  }
+}
+
+function toggleHistory() {
+  historyCollapsed = !historyCollapsed;
+  const section = document.getElementById('history-section');
+  if (section) {
+    if (historyCollapsed) section.classList.add('collapsed');
+    else section.classList.remove('collapsed');
+  }
 }
 
 // Error handling

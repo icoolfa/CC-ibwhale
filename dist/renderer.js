@@ -9242,7 +9242,7 @@ var term = new Dl({
     brightCyan: "#67e8f9",
     brightWhite: "#fff"
   },
-  scrollback: 1e4,
+  scrollback: 2e4,
   smoothScrollDuration: 100,
   scrollSensitivity: 4
 });

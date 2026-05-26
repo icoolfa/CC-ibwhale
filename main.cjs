@@ -1539,6 +1539,108 @@ ipcMain.on('conv-restart', (_event, convId) => {
   }
 });
 
+// ===== 对话历史持久化 =====
+const HISTORY_DIR = path.join(__dirname, '.ibwhale', 'history');
+
+function getDateFolder() {
+  const d = new Date();
+  return d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
+}
+
+ipcMain.handle('history-save', (_event, { id, title, agentType, content }) => {
+  try {
+    const dateFolder = getDateFolder();
+    const dir = path.join(HISTORY_DIR, dateFolder);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const filePath = path.join(dir, id + '.json');
+    const now = new Date().toISOString();
+    let existing = null;
+    if (fs.existsSync(filePath)) {
+      try { existing = JSON.parse(fs.readFileSync(filePath, 'utf-8')); } catch {}
+    }
+    const record = {
+      id,
+      title: title || '新对话',
+      createdAt: (existing && existing.createdAt) || now,
+      updatedAt: now,
+      agentType: agentType || 'claude-code',
+      content: content || '',
+    };
+    fs.writeFileSync(filePath, JSON.stringify(record, null, 2), 'utf-8');
+    return { ok: true };
+  } catch (err) {
+    console.error('[ibwhale] 保存历史失败:', err.message);
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('history-load-all', () => {
+  const result = [];
+  try {
+    if (!fs.existsSync(HISTORY_DIR)) return result;
+    const dateFolders = fs.readdirSync(HISTORY_DIR);
+    for (const df of dateFolders) {
+      const dfPath = path.join(HISTORY_DIR, df);
+      if (!fs.statSync(dfPath).isDirectory()) continue;
+      const files = fs.readdirSync(dfPath).filter(f => f.endsWith('.json'));
+      for (const f of files) {
+        const filePath = path.join(dfPath, f);
+        try {
+          const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+          result.push({
+            id: data.id,
+            title: data.title,
+            dateFolder: df,
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+            agentType: data.agentType,
+            // 不含 content，避免一次性加载大量数据
+          });
+        } catch { /* skip corrupt files */ }
+      }
+    }
+    // 按更新时间降序排列
+    result.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+  } catch (err) {
+    console.error('[ibwhale] 加载历史列表失败:', err.message);
+  }
+  return result;
+});
+
+ipcMain.handle('history-load-content', (_event, { dateFolder, convId }) => {
+  try {
+    const filePath = path.join(HISTORY_DIR, dateFolder, convId + '.json');
+    if (!fs.existsSync(filePath)) return null;
+    return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+  } catch (err) {
+    console.error('[ibwhale] 加载历史内容失败:', err.message);
+    return null;
+  }
+});
+
+ipcMain.handle('history-delete', (_event, { dateFolder, convId }) => {
+  try {
+    const filePath = path.join(HISTORY_DIR, dateFolder, convId + '.json');
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+    // 如果日期文件夹为空，也删除文件夹
+    const dfPath = path.join(HISTORY_DIR, dateFolder);
+    if (fs.existsSync(dfPath)) {
+      const remaining = fs.readdirSync(dfPath).filter(f => f.endsWith('.json'));
+      if (remaining.length === 0) {
+        fs.rmdirSync(dfPath);
+      }
+    }
+    return { ok: true };
+  } catch (err) {
+    console.error('[ibwhale] 删除历史失败:', err.message);
+    return { ok: false, error: err.message };
+  }
+});
+
 // ===== Agent 管理 =====
 
 // 检测本地已安装的 agent — 三级搜索：where/which → npm global → 常见路径
