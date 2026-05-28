@@ -1212,9 +1212,8 @@ function spawnPtyForConversation(convId) {
   const agentType = (existing && existing.agentType) || 'claude-code';
   const args = buildAgentCommand(agentType, projectRoot);
 
-  // Per-agent PTY settings (Python TUI agents need ConPTY for proper console I/O forwarding)
-  const agent = AGENTS.find(a => a.id === agentType);
-  const useConpty = (agent && agent.launch && agent.launch.useConpty) ? true : false;
+  // 在 Windows 上统一使用 ConPTY（winpty 对大段文本写入存在缓冲区溢出问题）
+  const useConpty = process.platform === 'win32';
 
   try {
     const ptyProcess = pty.spawn(shell, args, {
@@ -1241,9 +1240,10 @@ function spawnPtyForConversation(convId) {
       }
       // 仅当退出的 pty 仍是当前 pty 时才清空，防止旧 pty onExit 覆盖新 pty
       const conv = conversations.get(convId);
-      if (conv && conv.ptyProcess === ptyProcess) conv.ptyProcess = null;
+      if (conv && conv.ptyProcess === ptyProcess) {
+        conv.ptyProcess = null;
+      }
     });
-
     const conv = conversations.get(convId);
     if (conv) {
       conv.ptyProcess = ptyProcess;
@@ -1440,26 +1440,15 @@ function tileAllWindows() {
 }
 
 // ===== IPC: PTY =====
-const PTY_CHUNK_SIZE = 4096; // 4KB per chunk, safe for all PTY implementations
-const PTY_CHUNK_DELAY_MS = 5; // 5ms delay between chunks
-
+// PTY 输入直接整段写入。ConPTY（Windows）/ 原生 PTY（Linux/Mac）由操作系统
+// 管理缓冲区，无需手动分块。旧 winpty 分块方案已被 ConPTY 替代。
 ipcMain.on('pty-input', (event, data) => {
   const { info } = getWindowInfo(event);
   const conv = info ? conversations.get(info.activeConvId) : null;
   if (!conv || !conv.ptyProcess) return;
-  if (data.length <= PTY_CHUNK_SIZE) {
-    conv.ptyProcess.write(data);
-  } else {
-    let offset = 0;
-    const writeNext = () => {
-      if (offset >= data.length) return;
-      const chunk = data.slice(offset, offset + PTY_CHUNK_SIZE);
-      conv.ptyProcess.write(chunk);
-      offset += PTY_CHUNK_SIZE;
-      setTimeout(writeNext, PTY_CHUNK_DELAY_MS);
-    };
-    writeNext();
-  }
+  console.log(`[ibwhale-pty] 收到输入 ${data.length} 字符, conv=${info.activeConvId}`);
+  conv.ptyProcess.write(data);
+  console.log(`[ibwhale-pty] 写入完成 ${data.length} 字符`);
 });
 
 ipcMain.on('pty-resize', (event, { cols, rows }) => {

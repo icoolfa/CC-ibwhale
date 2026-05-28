@@ -9139,13 +9139,6 @@ var o = class {
 // src/renderer.ts
 var api = window.electronAPI;
 var $2 = (s15) => document.getElementById(s15);
-var MAX_INPUT_CHARS = 4e5;
-function guardInput(data) {
-  if (data.length > MAX_INPUT_CHARS) {
-    return data.slice(data.length - MAX_INPUT_CHARS);
-  }
-  return data;
-}
 var sbOpen = true;
 $2("sidebar-toggle").onclick = () => {
   sbOpen = !sbOpen;
@@ -9185,7 +9178,7 @@ cmdInput.onkeydown = (e) => {
 cmdInput.oninput = () => $2("cmd-send").classList.toggle("on", cmdInput.value.length > 0);
 function sendCmd() {
   if (!cmdInput.value) return;
-  api.sendInput(guardInput(cmdInput.value + "\r"));
+  api.sendInput(cmdInput.value + "\r");
   cmdInput.value = "";
   cmdInput.focus();
 }
@@ -9267,16 +9260,8 @@ var doFit = () => {
 };
 window.addEventListener("resize", doFit);
 new ResizeObserver(doFit).observe($2("terminal"));
-term.onData((d) => api.sendInput(guardInput(d)));
+term.onData((d) => api.sendInput(d));
 term.attachCustomKeyEventHandler(() => true);
-$2("terminal").addEventListener("paste", (e) => {
-  const pe2 = e;
-  const t = pe2.clipboardData?.getData("text");
-  if (t) {
-    pe2.preventDefault();
-    api.sendInput(guardInput(t));
-  }
-});
 var termWrap = document.querySelector(".term-wrap");
 document.addEventListener("dragover", (e) => {
   e.preventDefault();
@@ -9319,7 +9304,7 @@ document.addEventListener("drop", (e) => {
     ta2.setRangeText(data, s15, ta2.selectionEnd, "end");
     ta2.dispatchEvent(new Event("input", { bubbles: true }));
   } else if (termWrap?.contains(t)) {
-    api.sendInput(guardInput(data));
+    api.sendInput(data);
   }
 }, true);
 var ctxMenu = $2("ctx-menu");
@@ -9342,7 +9327,7 @@ $2("ctx-copy").onclick = () => {
 $2("ctx-paste").onclick = async () => {
   try {
     const t = await navigator.clipboard.readText();
-    if (t) api.sendInput(guardInput(t));
+    if (t) api.sendInput(t);
   } catch {
   }
   ctxMenu.style.display = "none";
