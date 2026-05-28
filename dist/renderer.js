@@ -9179,8 +9179,9 @@ cmdInput.oninput = () => $2("cmd-send").classList.toggle("on", cmdInput.value.le
 function sendCmd() {
   if (!cmdInput.value) return;
   const text = cmdInput.value;
-  if (text.length > 500) {
-    api.sendInput("\x1B[200~" + text + "\x1B[201~");
+  const wrapped = wrapLongPaste(text);
+  if (wrapped) {
+    api.sendInput(wrapped);
   } else {
     api.sendInput(text + "\r");
   }
@@ -9265,7 +9266,41 @@ var doFit = () => {
 };
 window.addEventListener("resize", doFit);
 new ResizeObserver(doFit).observe($2("terminal"));
-term.onData((d) => api.sendInput(d));
+var pasteFilter = null;
+function wrapLongPaste(text) {
+  if (text.length > 500) {
+    pasteFilter = {
+      buffer: "",
+      timeout: setTimeout(() => {
+        if (pasteFilter) {
+          term.write(pasteFilter.buffer);
+          pasteFilter = null;
+        }
+      }, 5e3)
+    };
+    return "\x1B[200~" + text + "\x1B[201~";
+  }
+  return null;
+}
+$2("terminal").addEventListener("paste", (e) => {
+  const text = e.clipboardData?.getData("text/plain");
+  if (text && text.length > 500) {
+    e.preventDefault();
+    e.stopPropagation();
+    const wrapped = wrapLongPaste(text);
+    if (wrapped) api.sendInput(wrapped);
+  }
+}, true);
+term.onData((d) => {
+  if (d.length > 500 && !d.startsWith("\x1B[200~")) {
+    const wrapped = wrapLongPaste(d);
+    if (wrapped) {
+      api.sendInput(wrapped);
+      return;
+    }
+  }
+  api.sendInput(d);
+});
 term.attachCustomKeyEventHandler(() => true);
 var termWrap = document.querySelector(".term-wrap");
 document.addEventListener("dragover", (e) => {
@@ -9309,7 +9344,8 @@ document.addEventListener("drop", (e) => {
     ta2.setRangeText(data, s15, ta2.selectionEnd, "end");
     ta2.dispatchEvent(new Event("input", { bubbles: true }));
   } else if (termWrap?.contains(t)) {
-    api.sendInput(data);
+    const wrapped = wrapLongPaste(data);
+    api.sendInput(wrapped || data);
   }
 }, true);
 var ctxMenu = $2("ctx-menu");
@@ -9332,7 +9368,10 @@ $2("ctx-copy").onclick = () => {
 $2("ctx-paste").onclick = async () => {
   try {
     const t = await navigator.clipboard.readText();
-    if (t) api.sendInput(t);
+    if (t) {
+      const wrapped = wrapLongPaste(t);
+      api.sendInput(wrapped || t);
+    }
   } catch {
   }
   ctxMenu.style.display = "none";
@@ -9429,6 +9468,17 @@ modeBtn.onclick = (e) => {
 var rm1 = api.onOutput((d) => {
   setStatus("\u8FD0\u884C\u4E2D", true);
   tryInitSync(d);
+  if (pasteFilter) {
+    pasteFilter.buffer += d;
+    const foldMatch = pasteFilter.buffer.match(/\[pasted text \d+ lines?\]/);
+    if (foldMatch) {
+      clearTimeout(pasteFilter.timeout);
+      const foldIdx = pasteFilter.buffer.indexOf(foldMatch[0]);
+      term.write(pasteFilter.buffer.substring(foldIdx));
+      pasteFilter = null;
+    }
+    return;
+  }
   term.write(d);
 });
 var rm2 = api.onExit((code) => {
