@@ -9178,7 +9178,12 @@ cmdInput.onkeydown = (e) => {
 cmdInput.oninput = () => $2("cmd-send").classList.toggle("on", cmdInput.value.length > 0);
 function sendCmd() {
   if (!cmdInput.value) return;
-  api.sendInput(cmdInput.value + "\r");
+  const text = cmdInput.value;
+  if (text.length > 500) {
+    api.sendInput("\x1B[200~" + text + "\x1B[201~");
+  } else {
+    api.sendInput(text + "\r");
+  }
   cmdInput.value = "";
   cmdInput.focus();
 }

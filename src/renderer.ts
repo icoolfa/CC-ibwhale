@@ -56,7 +56,16 @@ const cmdInput = $('cmd-input') as HTMLInputElement;
 $('cmd-send').onclick = sendCmd;
 cmdInput.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); sendCmd(); } };
 cmdInput.oninput = () => $('cmd-send').classList.toggle('on', cmdInput.value.length > 0);
-function sendCmd() { if (!cmdInput.value) return; api.sendInput(cmdInput.value + '\r'); cmdInput.value = ''; cmdInput.focus(); }
+function sendCmd() {
+  if (!cmdInput.value) return;
+  const text = cmdInput.value;
+  if (text.length > 500) {
+    api.sendInput('\x1B[200~' + text + '\x1B[201~');
+  } else {
+    api.sendInput(text + '\r');
+  }
+  cmdInput.value = ''; cmdInput.focus();
+}
 
 // Input resize handle — top-right corner, drag up=taller, down=shorter
 {

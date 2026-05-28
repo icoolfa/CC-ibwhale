@@ -1226,11 +1226,24 @@ function spawnPtyForConversation(convId) {
 
     ptyProcess.onData((data) => {
       const targetWin = getWindowForConvId(convId);
-      // 只要窗口存在就发送输出，不再限制 activeConvId
-      // （所有对话共享一个 PTY，输出总是发往窗口）
-      if (targetWin && !targetWin.isDestroyed()) {
-        targetWin.webContents.send('pty-output', data);
+      if (!targetWin || targetWin.isDestroyed()) return;
+
+      // 粘贴回显抑制：检测到 Claude Code 折叠消息后才放行输出
+      const echoState = pasteEchoStates.get(convId);
+      if (echoState && echoState.active) {
+        echoState.buffer += data;
+        const foldMatch = echoState.buffer.match(/\[pasted text \d+ lines?\]/);
+        if (foldMatch) {
+          clearTimeout(echoState.timeout);
+          const foldIdx = echoState.buffer.indexOf(foldMatch[0]);
+          targetWin.webContents.send('pty-output', echoState.buffer.substring(foldIdx));
+          echoState.active = false;
+          pasteEchoStates.delete(convId);
+        }
+        return;
       }
+
+      targetWin.webContents.send('pty-output', data);
     });
 
     ptyProcess.onExit(() => {
@@ -1242,6 +1255,10 @@ function spawnPtyForConversation(convId) {
       const conv = conversations.get(convId);
       if (conv && conv.ptyProcess === ptyProcess) {
         conv.ptyProcess = null;
+        ptyWriteQueues.delete(convId);
+        // 清理粘贴回显抑制状态
+        const echoState = pasteEchoStates.get(convId);
+        if (echoState) { clearTimeout(echoState.timeout); pasteEchoStates.delete(convId); }
       }
     });
     const conv = conversations.get(convId);
@@ -1265,6 +1282,11 @@ function killAllPtys() {
       conv.ptyProcess = null;
     }
   }
+  ptyWriteQueues.clear();
+  for (const [id, state] of pasteEchoStates) {
+    clearTimeout(state.timeout);
+  }
+  pasteEchoStates.clear();
 }
 
 // ===== 单实例锁 =====
@@ -1440,15 +1462,78 @@ function tileAllWindows() {
 }
 
 // ===== IPC: PTY =====
-// PTY 输入直接整段写入。ConPTY（Windows）/ 原生 PTY（Linux/Mac）由操作系统
-// 管理缓冲区，无需手动分块。旧 winpty 分块方案已被 ConPTY 替代。
+// ConPTY 管道缓冲区约 512-1024 字节（UTF-16），超出则丢弃。
+// 按 200 字符分块写入，保证每块远低于限制。
+const PTY_CHUNK_SIZE = 200;
+const PTY_CHUNK_DELAY_MS = 3;
+
+const ptyWriteQueues = new Map(); // convId -> { writing: boolean, queue: string[] }
+const pasteEchoStates = new Map(); // convId -> { active, lines, buffer, timeout }
+
+function enqueuePtyWrite(convId, ptyProcess, data) {
+  if (!ptyWriteQueues.has(convId)) {
+    ptyWriteQueues.set(convId, { writing: false, queue: [] });
+  }
+  const state = ptyWriteQueues.get(convId);
+  state.queue.push(data);
+  if (!state.writing) {
+    state.writing = true;
+    flushPtyQueue(convId, ptyProcess);
+  }
+}
+
+function flushPtyQueue(convId, ptyProcess) {
+  const state = ptyWriteQueues.get(convId);
+  if (!state || state.queue.length === 0) {
+    if (state) state.writing = false;
+    return;
+  }
+  const data = state.queue.shift();
+  let offset = 0;
+  const writeNext = () => {
+    if (offset >= data.length) {
+      console.log(`[ibwhale-pty] 写入完成 ${data.length} 字符, 剩余队列: ${state.queue.length}`);
+      flushPtyQueue(convId, ptyProcess);
+      return;
+    }
+    const chunk = data.slice(offset, offset + PTY_CHUNK_SIZE);
+    ptyProcess.write(chunk);
+    offset += PTY_CHUNK_SIZE;
+    setTimeout(writeNext, PTY_CHUNK_DELAY_MS);
+  };
+  writeNext();
+}
+
 ipcMain.on('pty-input', (event, data) => {
   const { info } = getWindowInfo(event);
   const conv = info ? conversations.get(info.activeConvId) : null;
   if (!conv || !conv.ptyProcess) return;
+
+  // 检测 bracketed paste（xterm 粘贴自动包裹 \x1B[200~ ... \x1B[201~）
+  // 超过 500 字符的长粘贴：抑制回显，只显示折叠消息
+  if (data.startsWith('\x1B[200~') && data.endsWith('\x1B[201~')) {
+    const pasteText = data.slice(6, -6); // 去掉 bracketed paste 标记
+    const lines = pasteText.split(/\r?\n/).length;
+    if (pasteText.length > 500) {
+      const state = { active: true, lines, buffer: '' };
+      state.timeout = setTimeout(() => {
+        const s = pasteEchoStates.get(info.activeConvId);
+        if (s && s.active) {
+          s.active = false;
+          const tw = getWindowForConvId(info.activeConvId);
+          if (s.buffer && tw && !tw.isDestroyed()) {
+            tw.webContents.send('pty-output', s.buffer);
+          }
+          pasteEchoStates.delete(info.activeConvId);
+        }
+      }, 5000);
+      pasteEchoStates.set(info.activeConvId, state);
+      // 超长粘贴：不显示任何占位提示，静默等待折叠消息
+    }
+  }
+
   console.log(`[ibwhale-pty] 收到输入 ${data.length} 字符, conv=${info.activeConvId}`);
-  conv.ptyProcess.write(data);
-  console.log(`[ibwhale-pty] 写入完成 ${data.length} 字符`);
+  enqueuePtyWrite(info.activeConvId, conv.ptyProcess, data);
 });
 
 ipcMain.on('pty-resize', (event, { cols, rows }) => {
