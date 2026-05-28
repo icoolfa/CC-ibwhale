@@ -1509,26 +1509,38 @@ ipcMain.on('pty-input', (event, data) => {
   const conv = info ? conversations.get(info.activeConvId) : null;
   if (!conv || !conv.ptyProcess) return;
 
+  let pasteText = null;
+  let hasMarkers = false;
+
   // 检测 bracketed paste（xterm 粘贴自动包裹 \x1B[200~ ... \x1B[201~）
-  // 超过 500 字符的长粘贴：抑制回显，只显示折叠消息
   if (data.startsWith('\x1B[200~') && data.endsWith('\x1B[201~')) {
-    const pasteText = data.slice(6, -6); // 去掉 bracketed paste 标记
+    pasteText = data.slice(6, -6);
+    hasMarkers = true;
+  } else if (data.length > 500) {
+    // 长文本但没有 bracketed paste 标记（如 cmdInput sendCmd、或 xterm 未启用模式）
+    pasteText = data;
+  }
+
+  // 长粘贴：激活回显抑制，只显示折叠消息
+  if (pasteText && pasteText.length > 500) {
     const lines = pasteText.split(/\r?\n/).length;
-    if (pasteText.length > 500) {
-      const state = { active: true, lines, buffer: '' };
-      state.timeout = setTimeout(() => {
-        const s = pasteEchoStates.get(info.activeConvId);
-        if (s && s.active) {
-          s.active = false;
-          const tw = getWindowForConvId(info.activeConvId);
-          if (s.buffer && tw && !tw.isDestroyed()) {
-            tw.webContents.send('pty-output', s.buffer);
-          }
-          pasteEchoStates.delete(info.activeConvId);
+    const state = { active: true, lines, buffer: '' };
+    state.timeout = setTimeout(() => {
+      const s = pasteEchoStates.get(info.activeConvId);
+      if (s && s.active) {
+        s.active = false;
+        const tw = getWindowForConvId(info.activeConvId);
+        if (s.buffer && tw && !tw.isDestroyed()) {
+          tw.webContents.send('pty-output', s.buffer);
         }
-      }, 5000);
-      pasteEchoStates.set(info.activeConvId, state);
-      // 超长粘贴：不显示任何占位提示，静默等待折叠消息
+        pasteEchoStates.delete(info.activeConvId);
+      }
+    }, 5000);
+    pasteEchoStates.set(info.activeConvId, state);
+
+    // 无标记的长文本需要自己包裹 \x1B[200~ ... \x1B[201~
+    if (!hasMarkers) {
+      data = '\x1B[200~' + pasteText + '\x1B[201~';
     }
   }
 

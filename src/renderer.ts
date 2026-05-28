@@ -56,17 +56,7 @@ const cmdInput = $('cmd-input') as HTMLInputElement;
 $('cmd-send').onclick = sendCmd;
 cmdInput.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); sendCmd(); } };
 cmdInput.oninput = () => $('cmd-send').classList.toggle('on', cmdInput.value.length > 0);
-function sendCmd() {
-  if (!cmdInput.value) return;
-  const text = cmdInput.value;
-  const wrapped = wrapLongPaste(text);
-  if (wrapped) {
-    api.sendInput(wrapped);
-  } else {
-    api.sendInput(text + '\r');
-  }
-  cmdInput.value = ''; cmdInput.focus();
-}
+function sendCmd() { if (!cmdInput.value) return; api.sendInput(cmdInput.value + '\r'); cmdInput.value = ''; cmdInput.focus(); }
 
 // Input resize handle — top-right corner, drag up=taller, down=shorter
 {
@@ -120,30 +110,8 @@ const doFit = () => { clearTimeout(rt); rt = setTimeout(() => { fitAddon.fit(); 
 window.addEventListener('resize', doFit);
 new ResizeObserver(doFit).observe($('terminal'));
 
-// 粘贴回显过滤：超长粘贴时在渲染侧拦截 term.write，等折叠消息出现后再放行
-let pasteFilter: { buffer: string; timeout: ReturnType<typeof setTimeout> } | null = null;
-
-function wrapLongPaste(text: string): string | null {
-  if (text.length > 500) {
-    pasteFilter = {
-      buffer: '',
-      timeout: setTimeout(() => {
-        if (pasteFilter) { term.write(pasteFilter.buffer); pasteFilter = null; }
-      }, 5000),
-    };
-    return '\x1B[200~' + text + '\x1B[201~';
-  }
-  return null;
-}
-
-// Keyboard — 兜底：长文本未包裹 bracketed paste 标记时，手动包裹以触发回显抑制
-term.onData((d: string) => {
-  if (d.length > 500 && !d.startsWith('\x1B[200~')) {
-    const wrapped = wrapLongPaste(d);
-    if (wrapped) { api.sendInput(wrapped); return; }
-  }
-  api.sendInput(d);
-});
+// Keyboard — 直通，不做任何拦截或修改
+term.onData((d: string) => api.sendInput(d));
 term.attachCustomKeyEventHandler(() => true);
 
 // Drag & drop — global capture on document so xterm.js internal elements
@@ -199,8 +167,7 @@ document.addEventListener('drop', (e) => {
     ta.dispatchEvent(new Event('input', { bubbles: true }));
   } else if (termWrap?.contains(t)) {
     // Dropped onto the terminal area — send to PTY
-    const wrapped = wrapLongPaste(data);
-    api.sendInput(wrapped || data);
+    api.sendInput(data);
   }
   // Dropped elsewhere (sidebar, topbar, etc.): silently ignore
 }, true);
@@ -215,7 +182,7 @@ $('terminal').addEventListener('contextmenu', (e: MouseEvent) => {
 });
 document.addEventListener('click', () => ctxMenu.style.display = 'none');
 $('ctx-copy').onclick = () => { const s = term.getSelection(); if (s) navigator.clipboard.writeText(s); ctxMenu.style.display = 'none'; };
-$('ctx-paste').onclick = async () => { try { const t = await navigator.clipboard.readText(); if (t) { const wrapped = wrapLongPaste(t); api.sendInput(wrapped || t); } } catch {} ctxMenu.style.display = 'none'; };
+$('ctx-paste').onclick = async () => { try { const t = await navigator.clipboard.readText(); if (t) api.sendInput(t); } catch {} ctxMenu.style.display = 'none'; };
 $('ctx-select-all').onclick = () => { term.selectAll(); ctxMenu.style.display = 'none'; };
 $('ctx-clear').onclick = () => { term.clear(); ctxMenu.style.display = 'none'; };
 
@@ -319,17 +286,6 @@ modeBtn.onclick = (e) => {
 const rm1 = api.onOutput((d: string) => {
   setStatus('运行中', true);
   tryInitSync(d);
-  if (pasteFilter) {
-    pasteFilter.buffer += d;
-    const foldMatch = pasteFilter.buffer.match(/\[pasted text \d+ lines?\]/);
-    if (foldMatch) {
-      clearTimeout(pasteFilter.timeout);
-      const foldIdx = pasteFilter.buffer.indexOf(foldMatch[0]);
-      term.write(pasteFilter.buffer.substring(foldIdx));
-      pasteFilter = null;
-    }
-    return;
-  }
   term.write(d);
 });
 const rm2 = api.onExit((code: number) => {
