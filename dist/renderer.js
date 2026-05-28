@@ -9282,15 +9282,6 @@ function wrapLongPaste(text) {
   }
   return null;
 }
-$2("terminal").addEventListener("paste", (e) => {
-  const text = e.clipboardData?.getData("text/plain");
-  if (text && text.length > 500) {
-    e.preventDefault();
-    e.stopPropagation();
-    const wrapped = wrapLongPaste(text);
-    if (wrapped) api.sendInput(wrapped);
-  }
-}, true);
 term.onData((d) => {
   if (d.length > 500 && !d.startsWith("\x1B[200~")) {
     const wrapped = wrapLongPaste(d);

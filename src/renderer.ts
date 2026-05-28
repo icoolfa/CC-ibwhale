@@ -136,17 +136,6 @@ function wrapLongPaste(text: string): string | null {
   return null;
 }
 
-// 拦截 xterm 内 Ctrl+V 粘贴：阻止 xterm.js 本地回显，由我们发送
-$('terminal').addEventListener('paste', (e: ClipboardEvent) => {
-  const text = e.clipboardData?.getData('text/plain');
-  if (text && text.length > 500) {
-    e.preventDefault();
-    e.stopPropagation();
-    const wrapped = wrapLongPaste(text);
-    if (wrapped) api.sendInput(wrapped);
-  }
-}, true);
-
 // Keyboard — 兜底：长文本未包裹 bracketed paste 标记时，手动包裹以触发回显抑制
 term.onData((d: string) => {
   if (d.length > 500 && !d.startsWith('\x1B[200~')) {
