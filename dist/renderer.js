@@ -9246,6 +9246,21 @@ window.updateTerminalColors = (colors) => {
 var fitAddon = new o();
 term.loadAddon(fitAddon);
 term.open($2("terminal"));
+{
+  const _core = term._core;
+  if (_core?.coreService?.triggerDataEvent) {
+    const _origTrigger = _core.coreService.triggerDataEvent.bind(_core.coreService);
+    _core.coreService.triggerDataEvent = function(data, isUserInput) {
+      if (isUserInput && data.length === 1) {
+        const code = data.charCodeAt(0);
+        if (code < 32 && code !== 9 && code !== 10 && code !== 13) {
+          return _origTrigger(data, false);
+        }
+      }
+      return _origTrigger(data, isUserInput);
+    };
+  }
+}
 setTimeout(() => {
   fitAddon.fit();
   api.sendResize(term.cols, term.rows);
@@ -9424,6 +9439,7 @@ modeBtn.onclick = (e) => {
 var rm1 = api.onOutput((d) => {
   setStatus("\u8FD0\u884C\u4E2D", true);
   tryInitSync(d);
+  d = d.replace(/\x1b\[\?(9|1000|1002|1003)[hl]/g, "");
   term.write(d);
 });
 var rm2 = api.onExit((code) => {

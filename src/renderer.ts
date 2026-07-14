@@ -104,6 +104,27 @@ const term = new Terminal({
 const fitAddon = new FitAddon();
 term.loadAddon(fitAddon);
 term.open($('terminal'));
+
+// 修复：xterm.js 的隐藏 textarea 在 Windows/ConPTY 下会收到幽灵 Ctrl+C keydown 事件，
+// 每次触发 triggerDataEvent('\x03', true) → onUserInput → clearSelection()，导致文本选择无法维持。
+// 解决方案：monkey-patch triggerDataEvent，控制字符（ASCII < 32 且非 Tab/换行）不作为 user input 处理。
+// 数据仍然通过 _onData 发给 PTY，不影响终端正常功能。
+{
+  const _core: any = (term as any)._core;
+  if (_core?.coreService?.triggerDataEvent) {
+    const _origTrigger = _core.coreService.triggerDataEvent.bind(_core.coreService);
+    _core.coreService.triggerDataEvent = function(data: string, isUserInput?: boolean) {
+      // 如果是幽灵控制字符触发的事件，不标记为 isUserInput，阻止 clearSelection
+      if (isUserInput && data.length === 1) {
+        const code = data.charCodeAt(0);
+        if (code < 32 && code !== 9 && code !== 10 && code !== 13) {
+          return _origTrigger(data, false);
+        }
+      }
+      return _origTrigger(data, isUserInput);
+    };
+  }
+}
 setTimeout(() => { fitAddon.fit(); api.sendResize(term.cols, term.rows); }, 100);
 let rt: ReturnType<typeof setTimeout>;
 const doFit = () => { clearTimeout(rt); rt = setTimeout(() => { fitAddon.fit(); api.sendResize(term.cols, term.rows); }, 80); };
@@ -286,6 +307,10 @@ modeBtn.onclick = (e) => {
 const rm1 = api.onOutput((d: string) => {
   setStatus('运行中', true);
   tryInitSync(d);
+  // 过滤 PTY 输出的鼠标跟踪序列，防止 xterm.js 切换到鼠标协议后
+  // 调用 _selectionService.disable() → clearSelection() 清除用户选择的文本
+  // DECSET/DECRST: 9=X10, 1000=VT200, 1002=DRAG, 1003=ANY
+  d = d.replace(/\x1b\[\?(9|1000|1002|1003)[hl]/g, '');
   term.write(d);
 });
 const rm2 = api.onExit((code: number) => {
