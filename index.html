@@ -212,9 +212,9 @@
     .input-wrapper:focus-within { border-color: var(--accent); }
     .input-wrapper textarea { flex: 1; border: none; background: transparent; color: var(--text); font-size: 15px; outline: none; padding: 4px; resize: none; min-height: 60px; max-height: 300px; line-height: 1.5; font-family: inherit; overflow-y: auto; }
     .input-wrapper textarea::placeholder { color: #5a5a6e; }
-    .input-resize-handle { position: absolute; top: 2px; right: 48px; width: 20px; height: 14px; cursor: ns-resize; display: flex; align-items: center; justify-content: center; border-radius: 3px; opacity: 0.3; transition: opacity 0.15s; }
-    .input-resize-handle:hover, .input-resize-handle:active { opacity: 0.7; }
-    .input-resize-handle::after { content: '▼'; font-size: 10px; color: var(--text-sub); line-height: 1; }
+    .input-resize-handle { position: absolute; top: 4px; right: 8px; width: 24px; height: 24px; cursor: ns-resize; display: flex; align-items: center; justify-content: center; border-radius: 4px; opacity: 0.35; transition: opacity 0.15s; }
+    .input-resize-handle:hover, .input-resize-handle:active { opacity: 0.9; background: var(--bg-hover); }
+    .input-resize-handle::after { content: '▼'; font-size: 18px; color: var(--text-sub); line-height: 1; }
     .send-btn { width: 36px; height: 36px; border-radius: 50%; border: none; background: var(--bg-input); color: var(--text-sub); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; flex-shrink: 0; }
     .send-btn.on { background: var(--accent); color: #fff; }
     .input-hint { text-align: center; font-size: 12px; color: var(--text-sub); margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 8px; }
@@ -353,6 +353,19 @@
     .name-input-wrap::placeholder { color: #555; }
     .name-save { width: 100%; padding: 12px; border: none; border-radius: 10px; background: var(--accent); color: #fff; font-size: 14px; font-weight: 500; cursor: pointer; margin-top: 16px; transition: background 0.15s; }
     .name-save:hover { background: var(--accent-hover); }
+
+    /* ── Close Confirm Overlay ── */
+    .close-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 500; align-items: center; justify-content: center; backdrop-filter: blur(8px); }
+    .close-overlay.open { display: flex; }
+    .close-card { background: var(--bg-sidebar); border: 1px solid var(--border); border-radius: 16px; padding: 28px; width: 380px; max-width: 92vw; text-align: center; }
+    .close-header h2 { font-size: 18px; font-weight: 600; margin-bottom: 10px; }
+    .close-desc { font-size: 13px; color: var(--text-sub); line-height: 1.6; margin: 0 0 20px; }
+    .close-actions { display: flex; gap: 10px; }
+    .close-actions button { flex: 1; padding: 10px 16px; border: none; border-radius: 10px; font-size: 14px; cursor: pointer; transition: all 0.15s; }
+    .close-btn-primary { background: var(--error); color: #fff; }
+    .close-btn-primary:hover { background: #e04444; }
+    .close-btn-secondary { background: var(--bg-card); color: var(--text); border: 1px solid var(--border); }
+    .close-btn-secondary:hover { background: var(--bg-hover); }
 
     /* ── Sidebar User Row ── */
     .sidebar-user-row { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 8px; }
@@ -794,6 +807,20 @@
 <div class="err-overlay" id="err-overlay">
   <div class="err-head"><span class="err-title">&#x26a0; 错误</span><div class="err-actions"><button class="err-btn" id="err-copy">复制</button><button class="err-btn" id="err-close">关闭</button></div></div>
   <pre class="err-text" id="err-text"></pre>
+</div>
+
+<!-- Close Confirm Modal -->
+<div class="close-overlay" id="close-overlay">
+  <div class="close-card">
+    <div class="close-header">
+      <h2>退出确认</h2>
+    </div>
+    <p class="close-desc">确定要关闭 ibwhale 吗？当前会话可能仍在运行。</p>
+    <div class="close-actions">
+      <button class="close-btn-secondary" id="close-cancel">取消</button>
+      <button class="close-btn-primary" id="close-confirm">确定关闭</button>
+    </div>
+  </div>
 </div>
 
 <!-- Name Setup -->

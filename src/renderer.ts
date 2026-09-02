@@ -46,10 +46,21 @@ $('sidebar-toggle').onclick = () => { sbOpen = !sbOpen; $('sidebar').classList.t
 let userKill = false;
 $('btn-min').onclick = () => api.minimize();
 $('btn-max').onclick = () => api.maximize();
-$('btn-close').onclick = () => { userKill = true; api.killProcess(); api.close(); };
+$('btn-close').onclick = () => $('close-overlay').classList.add('open');
 $('btn-tile').onclick = () => api.tileWindows();
 $('btn-kill').onclick = () => { userKill = true; api.killProcess(); setStatus('已终止', false); };
 $('btn-restart').onclick = () => { userKill = false; api.killProcess(); term.reset(); term.clear(); api.spawnProcess(); setStatus('启动中...', true); };
+
+// Close confirmation modal
+function closeApp() { userKill = true; api.killProcess(); api.close(); }
+$('close-confirm').onclick = closeApp;
+$('close-cancel').onclick = () => $('close-overlay').classList.remove('open');
+$('close-overlay').onclick = (e) => { if (e.target === $('close-overlay')) $('close-overlay').classList.remove('open'); };
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && $('close-overlay').classList.contains('open')) {
+    $('close-overlay').classList.remove('open');
+  }
+});
 
 // Input bar
 const cmdInput = $('cmd-input') as HTMLInputElement;

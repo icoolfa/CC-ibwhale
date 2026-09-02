@@ -9148,11 +9148,7 @@ $2("sidebar-toggle").onclick = () => {
 var userKill = false;
 $2("btn-min").onclick = () => api.minimize();
 $2("btn-max").onclick = () => api.maximize();
-$2("btn-close").onclick = () => {
-  userKill = true;
-  api.killProcess();
-  api.close();
-};
+$2("btn-close").onclick = () => $2("close-overlay").classList.add("open");
 $2("btn-tile").onclick = () => api.tileWindows();
 $2("btn-kill").onclick = () => {
   userKill = true;
@@ -9167,6 +9163,21 @@ $2("btn-restart").onclick = () => {
   api.spawnProcess();
   setStatus("\u542F\u52A8\u4E2D...", true);
 };
+function closeApp() {
+  userKill = true;
+  api.killProcess();
+  api.close();
+}
+$2("close-confirm").onclick = closeApp;
+$2("close-cancel").onclick = () => $2("close-overlay").classList.remove("open");
+$2("close-overlay").onclick = (e) => {
+  if (e.target === $2("close-overlay")) $2("close-overlay").classList.remove("open");
+};
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && $2("close-overlay").classList.contains("open")) {
+    $2("close-overlay").classList.remove("open");
+  }
+});
 var cmdInput = $2("cmd-input");
 $2("cmd-send").onclick = sendCmd;
 cmdInput.onkeydown = (e) => {
