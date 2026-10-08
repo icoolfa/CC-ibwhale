@@ -40,7 +40,7 @@ const $ = (s: string) => document.getElementById(s)!;
 
 // Sidebar
 let sbOpen = true;
-$('sidebar-toggle').onclick = () => { sbOpen = !sbOpen; $('sidebar').classList.toggle('hide', !sbOpen); api.tileWindows(); };
+$('sidebar-toggle').onclick = () => { sbOpen = !sbOpen; $('sidebar').classList.toggle('hide', !sbOpen); };
 
 // Window
 let userKill = false;

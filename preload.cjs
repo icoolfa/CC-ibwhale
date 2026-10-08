@@ -58,6 +58,7 @@ window.electronAPI = {
   toggleWhip: () => ipcRenderer.send('toggle-whip'),
   getTokenUsage: (filter) => ipcRenderer.invoke('get-token-usage', filter || {}),
   fetchModels: (cfg) => ipcRenderer.invoke('fetch-models', cfg),
+  testConnection: (cfg) => ipcRenderer.invoke('test-connection', cfg),
   // Agent management
   agentGetAll: () => ipcRenderer.invoke('agent-get-all'),
   agentScan: () => ipcRenderer.invoke('agent-scan'),
@@ -66,6 +67,8 @@ window.electronAPI = {
   agentInstall: (agentId) => ipcRenderer.invoke('agent-install', agentId),
   agentRunSetup: (agentId) => ipcRenderer.invoke('agent-run-setup', agentId),
   agentSwitch: (agentId) => ipcRenderer.invoke('agent-switch', agentId),
+  // Skills listing
+  skillsList: () => ipcRenderer.invoke('skills-list'),
   // History persistence
   historySave: (data) => ipcRenderer.invoke('history-save', data),
   historyLoadAll: () => ipcRenderer.invoke('history-load-all'),

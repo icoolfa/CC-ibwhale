@@ -266,6 +266,24 @@
     .api-clear button { background: none; border: none; color: var(--text-sub); cursor: pointer; font-size: 12px; text-decoration: underline; padding: 4px 8px; border-radius: 4px; }
     .api-clear button:hover { color: var(--error); }
 
+    /* ── API 高级设置折叠区 ── */
+    .api-advanced { margin-bottom: 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); overflow: hidden; }
+    .api-advanced-toggle { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; cursor: pointer; user-select: none; font-size: 13px; color: var(--text-sub); }
+    .api-advanced-toggle:hover { color: var(--text); }
+    .api-advanced-toggle .chevron { width: 14px; height: 14px; transition: transform 0.2s; opacity: 0.6; }
+    .api-advanced.open .chevron { transform: rotate(180deg); }
+    .api-advanced-body { padding: 0 14px 14px; display: none; }
+    .api-advanced.open .api-advanced-body { display: block; }
+    .api-input-group textarea { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font-size: 13px; outline: none; resize: vertical; font-family: 'Consolas', monospace; line-height: 1.5; transition: border-color 0.2s; }
+    .api-input-group textarea:focus { border-color: var(--accent); }
+    .api-input-group textarea::placeholder { color: #555; }
+    .api-test-btn { width: 100%; padding: 9px; border: 1px solid var(--accent); border-radius: 8px; background: rgba(16,163,127,0.1); color: var(--accent); font-size: 13px; cursor: pointer; transition: all 0.15s; margin-bottom: 10px; }
+    .api-test-btn:hover { background: rgba(16,163,127,0.2); }
+    .api-test-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .api-test-result { padding: 8px 12px; border-radius: 8px; font-size: 12px; line-height: 1.6; word-break: break-all; white-space: pre-wrap; display: none; }
+    .api-test-result.ok { display: block; background: rgba(16,163,127,0.12); color: var(--accent); }
+    .api-test-result.err { display: block; background: rgba(248,113,113,0.12); color: var(--error); }
+
     /* ── API Input Wrap + Eye ── */
     .api-input-wrap { position: relative; display: flex; align-items: center; }
     .api-input-wrap input { padding-right: 36px; }
@@ -714,6 +732,20 @@
         </div>
       </div>
     </div>
+    <div class="api-advanced" id="api-advanced">
+      <div class="api-advanced-toggle" id="api-advanced-toggle">
+        <span>高级设置</span>
+        <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div class="api-advanced-body">
+        <div class="api-input-group">
+          <label>自定义请求头 <span class="optional">每行一条 Name: Value</span></label>
+          <textarea id="api-custom-headers" rows="3" placeholder="X-Tenant-Id: 123&#10;X-API-Version: 2024-01-01"></textarea>
+        </div>
+        <button class="api-test-btn" id="api-test-btn">测试连接</button>
+        <div class="api-test-result" id="api-test-result"></div>
+      </div>
+    </div>
     <div class="api-status" id="api-status" style="display:none;"></div>
     <div class="api-url-preview" id="api-url-preview" style="display:none;"></div>
     <div class="api-models" id="api-models-section" style="display:none;">
@@ -938,6 +970,7 @@ let customModel = '';
 let apiKey = '';
 let localServiceUrl = '';
 let customApiUrl = '';
+let customHeaders = '';
 let userName = '';
 let customModels = {}; // { providerId: [ {id, label} ] }
 let providerConfigs = {}; // { providerId: { apiKey, customModel, localServiceUrl, customApiUrl, selectedModelId, customModels } }
@@ -958,6 +991,7 @@ async function loadConfigFromFile() {
     apiKey = savedConfig.apiKey || '';
     localServiceUrl = savedConfig.localServiceUrl || '';
     customApiUrl = savedConfig.customApiUrl || '';
+    customHeaders = savedConfig.customHeaders || '';
     userName = savedConfig.userName || '';
     customModels = savedConfig.customModels || {};
     providerConfigs = savedConfig.providerConfigs || {};
@@ -978,13 +1012,14 @@ async function persistConfig() {
       customModel,
       localServiceUrl,
       customApiUrl,
+      customHeaders,
       selectedModelId,
       customModels: customModels[selectedProviderId] || [],
     };
   }
   const cfg = {
     providerId: selectedProviderId,
-    apiKey, baseUrl: '', openaiBaseUrl: '', selectedModelId, customModel, localServiceUrl, customApiUrl, userName,
+    apiKey, baseUrl: '', openaiBaseUrl: '', selectedModelId, customModel, localServiceUrl, customApiUrl, customHeaders, userName,
     theme: localStorage.getItem('ibwhale_theme') || '#2a2a2a',
     customModels,
     providerConfigs,
@@ -1034,7 +1069,7 @@ function initUserName() {
     const oldName = userName;
     localStorage.removeItem('ibwhale_user_name');
     userName = '';
-    apiKey = ''; localServiceUrl = ''; customApiUrl = '';
+    apiKey = ''; localServiceUrl = ''; customApiUrl = ''; customHeaders = '';
     selectedProviderId = ''; selectedModelId = ''; customModel = '';
     savedConfig = null;
     // 删除旧用户的配置文件
@@ -1046,6 +1081,7 @@ function initUserName() {
     document.getElementById('api-custom-model').value = '';
     document.getElementById('api-custom-url').value = '';
     document.getElementById('api-local-url').value = '';
+    document.getElementById('api-custom-headers').value = '';
     // 刷新 Provider Grid 标记
     grid.querySelectorAll('.api-provider-item').forEach(el => {
       el.classList.toggle('configured', false);
@@ -1098,11 +1134,13 @@ function selectProvider(id) {
     document.getElementById('api-custom-model').value = pc.customModel || '';
     document.getElementById('api-local-url').value = pc.localServiceUrl || '';
     document.getElementById('api-custom-url').value = pc.customApiUrl || '';
+    document.getElementById('api-custom-headers').value = pc.customHeaders || '';
   } else if (id !== 'custom') {
     document.getElementById('api-key-input').value = '';
     document.getElementById('api-custom-model').value = '';
     if (id === 'local') document.getElementById('api-local-url').value = '';
     document.getElementById('api-custom-url').value = '';
+    document.getElementById('api-custom-headers').value = '';
   }
   renderModels(p);
   updateUrlPreview();
@@ -1359,6 +1397,46 @@ function normalizeUrl(url) {
   return url;
 }
 
+// ===== 高级设置折叠区 =====
+function toggleAdvanced() {
+  document.getElementById('api-advanced').classList.toggle('open');
+}
+document.getElementById('api-advanced-toggle').onclick = toggleAdvanced;
+
+// 测试连接：向 Anthropic /v1/messages 发最小对话请求，验证 URL + key + 模型 + 自定义头全链路
+async function testConnection() {
+  const btn = document.getElementById('api-test-btn');
+  const result = document.getElementById('api-test-result');
+  const baseUrl = normalizeUrl(document.getElementById('api-custom-url').value.trim());
+  const apiKey = document.getElementById('api-key-input').value.trim();
+  const model = document.getElementById('api-custom-model').value.trim() || selectedModelId;
+  const headers = document.getElementById('api-custom-headers').value;
+
+  result.className = 'api-test-result';
+  if (!baseUrl) { result.className = 'api-test-result err'; result.textContent = '请先填写 API 地址'; return; }
+  if (!apiKey) { result.className = 'api-test-result err'; result.textContent = '请先填写 API Key'; return; }
+
+  btn.disabled = true;
+  btn.textContent = '测试中...';
+  try {
+    const r = await window.electronAPI.testConnection({ baseUrl, apiKey, model, headers });
+    if (r.ok) {
+      result.className = 'api-test-result ok';
+      result.textContent = '连接成功，模型已响应';
+    } else {
+      result.className = 'api-test-result err';
+      result.textContent = r.error + (r.detail ? '\n' + r.detail : '');
+    }
+  } catch (e) {
+    result.className = 'api-test-result err';
+    result.textContent = '测试失败: ' + (e && e.message ? e.message : e);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '测试连接';
+  }
+}
+document.getElementById('api-test-btn').onclick = testConnection;
+
 document.getElementById('api-save').onclick = () => {
   const key = document.getElementById('api-key-input').value.trim();
   const customModelInput = document.getElementById('api-custom-model').value.trim();
@@ -1392,6 +1470,7 @@ document.getElementById('api-save').onclick = () => {
     baseUrl = p?.apiBaseUrl;
     openaiBaseUrl = p?.openaiBaseUrl || '';
   }
+  const headersInput = document.getElementById('api-custom-headers').value;
   const cfg = {
     providerId: selectedProviderId,
     apiKey: key,
@@ -1401,11 +1480,12 @@ document.getElementById('api-save').onclick = () => {
     customModel: customModelInput,
     localServiceUrl: localUrl,
     customApiUrl: customUrl,
+    customHeaders: headersInput,
     userName,
     theme: localStorage.getItem('ibwhale_theme') || '#2a2a2a',
     customModels,
   };
-  savedConfig = cfg; apiKey = key; customModel = customModelInput; localServiceUrl = localUrl; customApiUrl = customUrl;
+  savedConfig = cfg; apiKey = key; customModel = customModelInput; localServiceUrl = localUrl; customApiUrl = customUrl; customHeaders = headersInput;
   persistConfig();
   // Update model dropdown — only show this provider's models
   selectedModelId = modelId;
@@ -2351,13 +2431,45 @@ function renderPlugins() {
       ${actionHtml}
     </div>`;
   }).join('');
-  dd.innerHTML = items || '<div class="plugin-empty">暂无插件</div>';
+  dd.innerHTML = (installedSkills.length
+    ? `<div class="plugin-section-label" id="plugin-skills-label" style="padding:6px 10px;font-size:11px;color:var(--text-sub);font-weight:600;letter-spacing:.5px;">SKILLS (${installedSkills.length})</div>`
+    : '') +
+    installedSkills.map(s => `
+    <div class="plugin-item" onclick="activateSkill('${s.id}')" title="点击将 /${s.name} 填入输入框" style="cursor:pointer;">
+      <div class="plugin-icon" style="background:var(--bg-input);color:var(--accent);font-weight:700;">/</div>
+      <div class="plugin-info">
+        <div class="plugin-name">${s.name}</div>
+        <div class="plugin-desc">${escapeHtml(s.description || '(无描述)')}</div>
+      </div>
+      <span style="color:var(--text-sub);font-size:10px;flex-shrink:0;background:var(--bg-input);border-radius:4px;padding:2px 6px;">${s.scope === 'project' ? '项目' : '全局'}</span>
+    </div>`).join('') +
+    `<div class="plugin-section-label" style="padding:6px 10px;font-size:11px;color:var(--text-sub);font-weight:600;letter-spacing:.5px;margin-top:4px;">工具</div>` +
+    items || '<div class="plugin-empty">暂无插件</div>';
+}
+
+// 点击 skill → 把 /{name} 填入输入框
+function activateSkill(id) {
+  const s = installedSkills.find(x => x.id === id);
+  const input = document.getElementById('cmd-input');
+  if (s && input) {
+    input.value = '/' + s.name + ' ';
+    input.focus();
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    document.getElementById('plugin-dropdown').classList.remove('open');
+  }
+}
+let installedSkills = [];
+function escapeHtml(t) {
+  return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 document.getElementById('btn-plugins').onclick = (e) => {
   e.stopPropagation();
-  document.getElementById('plugin-dropdown').classList.toggle('open');
   document.getElementById('model-dropdown').classList.remove('open');
+  if (installedSkills.length === 0 && window.electronAPI && window.electronAPI.skillsList) {
+    window.electronAPI.skillsList().then(r => { if (r && r.skills) installedSkills = r.skills; renderPlugins(); });
+  }
+  document.getElementById('plugin-dropdown').classList.toggle('open');
   renderPlugins();
 };
 

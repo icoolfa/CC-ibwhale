@@ -167,6 +167,18 @@ function saveLocalConfig(cfg) {
       console.error('[ibwhale] 写入 .env 失败:', err.message);
     }
   }
+  // 同步写入自定义请求头文件（getShellEnv 读取后注入 ANTHROPIC_CUSTOM_HEADERS，SDK 按换行解析 Name: Value）
+  try {
+    const headerFile = path.join(path.join(__dirname, '..'), 'custom-headers.txt');
+    const headers = (cfg && cfg.customHeaders || '').trim();
+    if (headers) {
+      fs.writeFileSync(headerFile, headers, 'utf-8');
+    } else if (fs.existsSync(headerFile)) {
+      fs.unlinkSync(headerFile);
+    }
+  } catch (err) {
+    console.error('[ibwhale] 写入自定义请求头失败:', err.message);
+  }
 }
 
 let mainWindow = null;
@@ -1069,6 +1081,15 @@ function getShellEnv(agentType) {
     env.CLAUDE_CODE_GIT_BASH_PATH = gitBash;
   }
 
+  // 注入自定义请求头（ANTHROPIC_CUSTOM_HEADERS，Claude Code SDK 按换行解析 Name: Value）
+  try {
+    const headerFile = path.join(projectRoot, 'custom-headers.txt');
+    if (fs.existsSync(headerFile)) {
+      const ch = fs.readFileSync(headerFile, 'utf-8').trim();
+      if (ch) env.ANTHROPIC_CUSTOM_HEADERS = ch;
+    }
+  } catch {}
+
   // ===== Agent 特定环境变量注入 =====
   if (agentType && agentType !== 'claude-code') {
     const agent = AGENTS.find(a => a.id === agentType);
@@ -1426,9 +1447,22 @@ function tileAllWindows() {
   }
   if (wins.length === 0) return;
 
+  // 按窗口当前所在屏幕分组，各自在所属屏幕内整理，不跨屏幕移动
+  const groups = new Map(); // display.id -> { workArea, wins }
+  for (const win of wins) {
+    const d = screen.getDisplayMatching(win.getBounds());
+    if (!groups.has(d.id)) groups.set(d.id, { workArea: d.workArea, wins: [] });
+    groups.get(d.id).wins.push(win);
+  }
+
+  for (const { workArea, wins: groupWins } of groups.values()) {
+    tileWindowsInArea(groupWins, workArea);
+  }
+}
+
+function tileWindowsInArea(wins, workArea) {
   const GAP = 4;
-  const display = screen.getPrimaryDisplay();
-  const { x: waX, y: waY, width: waW, height: waH } = display.workArea;
+  const { x: waX, y: waY, width: waW, height: waH } = workArea;
 
   const n = wins.length;
 
@@ -1934,6 +1968,52 @@ ipcMain.handle('agent-switch', async (event, agentId) => {
   spawnPtyForConversation(convId);
 
   return { ok: true, agentId, agentName: agent.name };
+});
+
+// ===== Skills listing =====
+// 扫描项目 .claude/skills/ 与全局 ~/.claude/skills/，读取每个 SKILL.md 的 frontmatter(name/description)
+function scanSkillDir(dir) {
+  const out = [];
+  if (!dir) return out;
+  let entries;
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return out; }
+  for (const ent of entries) {
+    if (!ent.isDirectory()) continue;
+    const skillDir = path.join(dir, ent.name);
+    const skillMd = path.join(skillDir, 'SKILL.md');
+    if (!fs.existsSync(skillMd)) continue;
+    let raw = '';
+    try { raw = fs.readFileSync(skillMd, 'utf8'); } catch { continue; }
+    let name = ent.name, description = '';
+    const fm = raw.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+    if (fm) {
+      const nameM = fm[1].match(/name\s*:\s*["']?([^"'\r\n]+)/);
+      if (nameM) name = nameM[1].trim();
+      const descM = fm[1].match(/description\s*:\s*["']?([^"']+)/);
+      if (descM) description = descM[1].trim().replace(/\s+/g, ' ');
+    }
+    // 无 frontmatter 时：从首行 # 标题取描述
+    if (!description) {
+      const h = raw.match(/^#\s+(.+)$/m);
+      if (h) description = h[1].trim();
+    }
+    out.push({ id: ent.name, name, description });
+  }
+  out.sort((a, b) => a.name.localeCompare(b.name, 'zh'));
+  return out;
+}
+
+ipcMain.handle('skills-list', async () => {
+  const projectDir = path.join(__dirname, '..', '.claude', 'skills');
+  const globalDir = path.join(os.homedir(), '.claude', 'skills');
+  const seen = new Map();
+  const project = scanSkillDir(projectDir);
+  const global = scanSkillDir(globalDir);
+  for (const s of project) seen.set(s.id, { ...s, scope: 'project' });
+  for (const s of global) if (!seen.has(s.id)) seen.set(s.id, { ...s, scope: 'global' });
+  const list = [...seen.values()];
+  list.sort((a, b) => a.name.localeCompare(b.name, 'zh'));
+  return { skills: list, projectDir, globalDir };
 });
 
 // Set model env and restart active PTY
@@ -2473,6 +2553,83 @@ ipcMain.handle('fetch-models', async (_event, { baseUrl, apiKey }) => {
       resolve({ error: msg, models: [] });
     });
     req.on('timeout', () => { req.destroy(); resolve({ error: '请求超时', models: [] }); });
+    req.end();
+  });
+});
+
+// 测试连接：向 Anthropic 端点发最小对话请求（/v1/messages），验证 URL + key + 模型 + 自定义头全链路
+ipcMain.handle('test-connection', async (_event, { baseUrl, apiKey, model, headers }) => {
+  if (!baseUrl) return { ok: false, error: '请先填写 API 地址' };
+  if (!apiKey) return { ok: false, error: '请先填写 API Key' };
+
+  // 拼接 Anthropic messages 端点（base URL + /v1/messages；若已含 /v1/messages 则原样使用）
+  let endpoint;
+  try {
+    const u = new URL(baseUrl);
+    let p = u.pathname.replace(/\/+$/, '');
+    if (!p.endsWith('/v1/messages')) p += '/v1/messages';
+    endpoint = u.protocol + '//' + u.host + p;
+  } catch {
+    return { ok: false, error: 'API 地址无效' };
+  }
+
+  // 解析自定义请求头（每行 Name: Value）
+  const customHeaders = {};
+  if (headers) {
+    for (const line of String(headers).split(/\n|\r\n/)) {
+      const t = line.trim();
+      if (!t) continue;
+      const idx = t.indexOf(':');
+      if (idx > 0) customHeaders[t.slice(0, idx).trim()] = t.slice(idx + 1).trim();
+    }
+  }
+
+  const body = JSON.stringify({
+    model: model || 'claude-sonnet-4-6',
+    max_tokens: 16,
+    messages: [{ role: 'user', content: 'hi' }],
+  });
+
+  return new Promise((resolve) => {
+    const url = new URL(endpoint);
+    const transport = url.protocol === 'https:' ? https : http;
+    const options = {
+      method: 'POST',
+      hostname: url.hostname,
+      port: url.port || (url.protocol === 'https:' ? 443 : 80),
+      path: url.pathname + url.search,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + apiKey,
+        ...customHeaders,
+      },
+      timeout: 30000,
+    };
+    const req = transport.request(options, (res) => {
+      let data = '';
+      res.setEncoding('utf8');
+      res.on('data', (c) => (data += c));
+      res.on('end', () => {
+        if (res.statusCode >= 400) {
+          let msg = 'HTTP ' + res.statusCode;
+          if (res.statusCode === 401) msg = 'API Key 无效或未授权';
+          else if (res.statusCode === 402) msg = '账户余额不足';
+          else if (res.statusCode === 403) msg = '无权限访问该模型';
+          else if (res.statusCode === 404) msg = '端点不存在，请检查 API 地址';
+          return resolve({ ok: false, error: msg, detail: data.slice(0, 300) });
+        }
+        resolve({ ok: true, detail: data.slice(0, 300) });
+      });
+    });
+    req.on('error', (e) => {
+      let msg = '网络错误: ' + (e.code || e.message);
+      if (e.code === 'ENOTFOUND') msg = '无法连接到该 API 地址';
+      else if (e.code === 'ECONNREFUSED') msg = '连接被拒绝';
+      else if (e.code === 'ETIMEDOUT' || e.code === 'ECONNRESET') msg = '请求超时';
+      resolve({ ok: false, error: msg });
+    });
+    req.on('timeout', () => { req.destroy(); resolve({ ok: false, error: '请求超时' }); });
+    req.write(body);
     req.end();
   });
 });
